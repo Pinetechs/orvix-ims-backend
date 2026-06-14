@@ -33,8 +33,7 @@ public class CompanyService {
         }
         Company company = new Company();
         company.setCode(code);
-        company.setNameAr(trimRequired(request.getNameAr(), "Arabic name"));
-        company.setNameEn(trimToNull(request.getNameEn()));
+        company.setName(request.getName());
         company.setActive(true);
         return CompanyResponse.from(companyRepository.save(company));
     }
@@ -42,8 +41,7 @@ public class CompanyService {
     public CompanyResponse update(Long id, UpdateCompanyRequest request, User currentUser) {
         requireSystemAdmin(currentUser, PermissionCode.COMPANY_UPDATE);
         Company company = findCompany(id);
-        company.setNameAr(trimRequired(request.getNameAr(), "Arabic name"));
-        company.setNameEn(trimToNull(request.getNameEn()));
+        company.setName(request.getName());
         company.setActive(request.getActive() == null || request.getActive());
         return CompanyResponse.from(companyRepository.save(company));
     }

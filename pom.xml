@@ -77,6 +77,8 @@
 
 
 
+
+
 		<!-- JWT - old version, keep temporarily if inherited security code depends on it -->
 		<dependency>
 			<groupId>io.jsonwebtoken</groupId>
@@ -94,7 +96,7 @@
 		<dependency>
 			<groupId>org.apache.poi</groupId>
 			<artifactId>poi-ooxml</artifactId>
-			<version>5.2.2</version>
+			<version>5.3.0</version>
 		</dependency>
 
 		<!-- iText PDF - keep if PDF reports/contracts will be generated -->

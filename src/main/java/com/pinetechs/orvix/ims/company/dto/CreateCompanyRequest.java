@@ -6,13 +6,22 @@ public class CreateCompanyRequest {
     @NotBlank
     private String code;
     @NotBlank
-    private String nameAr;
-    private String nameEn;
+    private String name;
 
-    public String getCode() { return code; }
-    public void setCode(String code) { this.code = code; }
-    public String getNameAr() { return nameAr; }
-    public void setNameAr(String nameAr) { this.nameAr = nameAr; }
-    public String getNameEn() { return nameEn; }
-    public void setNameEn(String nameEn) { this.nameEn = nameEn; }
+
+    public String getCode() {
+        return code;
+    }
+
+    public void setCode(String code) {
+        this.code = code;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
 }

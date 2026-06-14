@@ -6,8 +6,7 @@ import java.time.LocalDateTime;
 public class CompanyResponse {
     private Long id;
     private String code;
-    private String nameAr;
-    private String nameEn;
+    private String name;
     private Boolean active;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -16,8 +15,7 @@ public class CompanyResponse {
         CompanyResponse response = new CompanyResponse();
         response.id = company.getId();
         response.code = company.getCode();
-        response.nameAr = company.getNameAr();
-        response.nameEn = company.getNameEn();
+        response.name = company.getName();
         response.active = company.getActive();
         response.createdAt = company.getCreatedAt();
         response.updatedAt = company.getUpdatedAt();
@@ -26,8 +24,13 @@ public class CompanyResponse {
 
     public Long getId() { return id; }
     public String getCode() { return code; }
-    public String getNameAr() { return nameAr; }
-    public String getNameEn() { return nameEn; }
+
+    public String getName() {
+        return name;
+    }
+
+
+
     public Boolean getActive() { return active; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

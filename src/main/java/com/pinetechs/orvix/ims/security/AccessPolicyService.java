@@ -1,6 +1,6 @@
 package com.pinetechs.orvix.ims.security;
 
-import com.pinetechs.orvix.ims.inventory.enums.InventoryDomain;
+import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.user.entity.User;
 import com.pinetechs.orvix.ims.user.enums.PermissionCode;
 import org.springframework.security.access.AccessDeniedException;

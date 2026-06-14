@@ -31,6 +31,8 @@ public class ApiResponse<T> {
         return new ApiResponse<>(true, message);
     }
 
+
+
     public static ApiResponse<Void> failed(String message) {
         return new ApiResponse<>(false, message);
     }

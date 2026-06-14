@@ -1,7 +1,7 @@
 package com.pinetechs.orvix.ims.user.dto;
 
 import com.pinetechs.orvix.ims.company.entity.Company;
-import com.pinetechs.orvix.ims.inventory.enums.InventoryDomain;
+import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.user.entity.User;
 import com.pinetechs.orvix.ims.user.enums.AccessChannel;
 import com.pinetechs.orvix.ims.user.enums.PermissionCode;
@@ -46,7 +46,7 @@ public class UserResponse {
             for (Company company : user.getCompanies()) {
                 if (company != null) {
                     response.companyIds.add(company.getId());
-                    response.companyNames.add(company.getNameAr());
+                    response.companyNames.add(company.getName());
                 }
             }
         }

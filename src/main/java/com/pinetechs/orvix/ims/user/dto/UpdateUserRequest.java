@@ -1,6 +1,6 @@
 package com.pinetechs.orvix.ims.user.dto;
 
-import com.pinetechs.orvix.ims.inventory.enums.InventoryDomain;
+import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.user.enums.PermissionCode;
 import com.pinetechs.orvix.ims.user.enums.UserType;
 import jakarta.validation.constraints.NotBlank;

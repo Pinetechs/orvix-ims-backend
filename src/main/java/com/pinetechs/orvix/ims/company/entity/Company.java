@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
         name = "companies",
         indexes = {
                 @Index(name = "idx_companies_code", columnList = "code"),
+                @Index(name = "idx_companies_name", columnList = "name"),
                 @Index(name = "idx_companies_active", columnList = "is_active")
         }
 )
@@ -21,53 +22,136 @@ public class Company {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @NotBlank
-    @Column(name = "code", nullable = false, unique = true, length = 50)
+    @NotBlank(message = "Company code is required")
+    @Column(
+            name = "code",
+            nullable = false,
+            unique = true,
+            length = 50
+    )
     private String code;
 
-    @NotBlank
-    @Column(name = "name_ar", nullable = false, length = 200)
-    private String nameAr;
+    @NotBlank(message = "Company name is required")
+    @Column(
+            name = "name",
+            nullable = false,
+            length = 200
+    )
+    private String name;
 
-    @Column(name = "name_en", length = 200)
-    private String nameEn;
-
-    @Column(name = "is_active", nullable = false)
+    @Column(
+            name = "is_active",
+            nullable = false
+    )
     private Boolean active = true;
 
     @CreationTimestamp
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(
+            name = "created_at",
+            nullable = false,
+            updatable = false
+    )
     private LocalDateTime createdAt;
 
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    public Company() {}
+    public Company() {
+    }
 
-    public Company(Long id) { this.id = id; }
+    public Company(Long id) {
+        this.id = id;
+    }
+
+    public Company(Long id, String name) {
+        this.id = id;
+        this.name = name;
+    }
 
     @PrePersist
     public void prePersist() {
-        if (active == null) active = true;
-        if (code != null) code = code.trim().toUpperCase();
+
+        if (active == null) {
+            active = true;
+        }
+
+        normalizeFields();
     }
 
     @PreUpdate
     public void preUpdate() {
-        if (code != null) code = code.trim().toUpperCase();
+        normalizeFields();
     }
 
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-    public String getCode() { return code; }
-    public void setCode(String code) { this.code = code; }
-    public String getNameAr() { return nameAr; }
-    public void setNameAr(String nameAr) { this.nameAr = nameAr; }
-    public String getNameEn() { return nameEn; }
-    public void setNameEn(String nameEn) { this.nameEn = nameEn; }
-    public Boolean getActive() { return active; }
-    public void setActive(Boolean active) { this.active = active; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    private void normalizeFields() {
+
+        if (code != null) {
+            code = code.trim().toUpperCase();
+        }
+
+        if (name != null) {
+            name = name.trim();
+        }
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getCode() {
+        return code;
+    }
+
+    public void setCode(String code) {
+
+        this.code = code == null
+                ? null
+                : code.trim().toUpperCase();
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+
+        this.name = name == null
+                ? null
+                : name.trim();
+    }
+
+    public Boolean getActive() {
+        return active;
+    }
+
+    public void setActive(Boolean active) {
+        this.active = active;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public boolean isActiveCompany() {
+        return Boolean.TRUE.equals(active);
+    }
+
+    @Override
+    public String toString() {
+        return "Company{" +
+                "id=" + id +
+                ", code='" + code + '\'' +
+                ", name='" + name + '\'' +
+                ", active=" + active +
+                '}';
+    }
 }

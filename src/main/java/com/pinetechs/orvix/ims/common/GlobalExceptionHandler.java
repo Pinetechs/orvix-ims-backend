@@ -75,13 +75,15 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse> handleIllegalArgumentException(IllegalArgumentException ex) {
+        System.err.println("IllegalArgumentException: " + ex.getMessage());
         return ResponseEntity
                 .badRequest()
-                .body(ApiResponse.failed(ex.getMessage()));
+                .body(ApiResponse.failed("Invalid argument: " + ex.getMessage()));
     }
 
     @ExceptionHandler(DateTimeParseException.class)
     public ResponseEntity<ApiResponse> handleDateTimeParseException(DateTimeParseException ex) {
+
         return ResponseEntity
                 .badRequest()
                 .body(ApiResponse.failed("Invalid date/time format"));
@@ -141,4 +143,6 @@ public class GlobalExceptionHandler {
                 .status(HttpStatus.UNAUTHORIZED)
                 .body(ApiResponse.failed("Invalid username or password"));
     }
+
+
 }

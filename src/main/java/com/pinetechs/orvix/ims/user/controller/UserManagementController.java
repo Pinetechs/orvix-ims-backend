@@ -2,7 +2,7 @@ package com.pinetechs.orvix.ims.user.controller;
 
 import com.pinetechs.orvix.ims.auth.security.JwtUserDetails;
 import com.pinetechs.orvix.ims.common.ApiResponse;
-import com.pinetechs.orvix.ims.inventory.enums.InventoryDomain;
+import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.user.dto.CreateUserRequest;
 import com.pinetechs.orvix.ims.user.dto.ResetPasswordRequest;
 import com.pinetechs.orvix.ims.user.dto.UpdateUserRequest;

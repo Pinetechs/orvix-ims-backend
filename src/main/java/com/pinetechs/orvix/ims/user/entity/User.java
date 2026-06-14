@@ -2,7 +2,7 @@ package com.pinetechs.orvix.ims.user.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.pinetechs.orvix.ims.company.entity.Company;
-import com.pinetechs.orvix.ims.inventory.enums.InventoryDomain;
+import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.user.enums.AccessChannel;
 import com.pinetechs.orvix.ims.user.enums.PermissionCode;
 import com.pinetechs.orvix.ims.user.enums.UserType;

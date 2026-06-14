@@ -4,14 +4,23 @@ import jakarta.validation.constraints.NotBlank;
 
 public class UpdateCompanyRequest {
     @NotBlank
-    private String nameAr;
-    private String nameEn;
+    private String name;
     private Boolean active;
 
-    public String getNameAr() { return nameAr; }
-    public void setNameAr(String nameAr) { this.nameAr = nameAr; }
-    public String getNameEn() { return nameEn; }
-    public void setNameEn(String nameEn) { this.nameEn = nameEn; }
-    public Boolean getActive() { return active; }
-    public void setActive(Boolean active) { this.active = active; }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public Boolean getActive() {
+        return active;
+    }
+
+    public void setActive(Boolean active) {
+        this.active = active;
+    }
 }

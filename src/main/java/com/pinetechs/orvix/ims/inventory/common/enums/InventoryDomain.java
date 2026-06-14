@@ -1,4 +1,4 @@
-package com.pinetechs.orvix.ims.inventory.enums;
+package com.pinetechs.orvix.ims.inventory.common.enums;
 
 public enum InventoryDomain {
     VEHICLE,
