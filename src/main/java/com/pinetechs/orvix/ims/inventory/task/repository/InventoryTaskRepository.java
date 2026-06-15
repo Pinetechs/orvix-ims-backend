@@ -28,7 +28,9 @@ public interface InventoryTaskRepository extends JpaRepository<InventoryTask, Lo
 
     long countByCompanyIdAndStatus(Long companyId, InventoryTaskStatus status);
 
-    Page<VehicleInventoryItem> findByInventoryTaskId(Long taskId, Pageable pageable);
+  //  Page<VehicleInventoryItem> findByInventoryTaskId(Long taskId, Pageable pageable);
+
+
 
 
 }

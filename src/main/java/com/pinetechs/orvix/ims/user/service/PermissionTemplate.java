@@ -8,6 +8,8 @@ import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Set;
 
+
+
 public final class PermissionTemplate {
 
     private PermissionTemplate() {}
@@ -28,6 +30,18 @@ public final class PermissionTemplate {
                     PermissionCode.USER_RESET_PASSWORD
             ));
         }
+
+
+
+
+        // Supervisor gets permissions based on the domains they are assigned to, so we don't return any default permissions here.
+        if (userType == UserType.PINETECHS_SUPPORT_STAFF) {
+            return EnumSet.allOf(PermissionCode.class);
+        }
+
+
+
+
 
         if (userType == UserType.COMPANY_ADMIN) {
             return companyAdminReportOnlyPermissions();
@@ -58,6 +72,12 @@ public final class PermissionTemplate {
         if (userType == UserType.COMPANY_ADMIN) {
             return new HashSet<>(EnumSet.allOf(InventoryDomain.class));
         }
+
+        if (userType == UserType.PINETECHS_SUPPORT_STAFF) {
+            return new HashSet<>(EnumSet.allOf(InventoryDomain.class));
+        }
+
+
         return requested == null ? new HashSet<>() : new HashSet<>(requested);
     }
 

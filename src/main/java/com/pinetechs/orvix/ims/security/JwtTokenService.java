@@ -1,8 +1,9 @@
-package com.pinetechs.orvix.ims.auth.security;
+package com.pinetechs.orvix.ims.security;
 
 import com.pinetechs.orvix.ims.config.Config;
 import com.pinetechs.orvix.ims.config.Property;
 import com.pinetechs.orvix.ims.user.entity.User;
+import com.pinetechs.orvix.ims.user.enums.AccessChannel;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
@@ -66,6 +67,12 @@ public class JwtTokenService {
 
     public String getUsernameFromToken(String token) {
         return getClaimFromToken(token, Claims::getSubject);
+    }
+
+
+    public AccessChannel getAccessChannelFromToken(String token) throws IllegalArgumentException {
+        String channel = getClaimFromToken(token, claims -> claims.get(CLAIM_CHANNEL, String.class));
+        return channel == null ? null : AccessChannel.valueOf(channel);
     }
 
     public Long getUserIdFromToken(String token) {

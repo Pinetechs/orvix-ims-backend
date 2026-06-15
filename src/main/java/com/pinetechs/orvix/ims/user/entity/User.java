@@ -147,6 +147,7 @@ public class User {
     public boolean isCompanyAdmin() { return userType == UserType.COMPANY_ADMIN; }
     public boolean isSupervisor() { return userType == UserType.SUPERVISOR; }
     public boolean isInventoryStaff() { return userType == UserType.INVENTORY_STAFF; }
+    public boolean isPintechsStaff() { return userType == UserType.PINETECHS_SUPPORT_STAFF; }
 
     public String getFullName() {
         String fn = firstName == null ? "" : firstName.trim();

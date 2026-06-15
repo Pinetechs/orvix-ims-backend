@@ -2,8 +2,8 @@ package com.pinetechs.orvix.ims.auth.controller;
 
 import com.pinetechs.orvix.ims.auth.dto.LoginRequest;
 import com.pinetechs.orvix.ims.auth.dto.LoginResponse;
-import com.pinetechs.orvix.ims.auth.security.JwtTokenService;
-import com.pinetechs.orvix.ims.auth.security.JwtUserDetails;
+import com.pinetechs.orvix.ims.security.JwtTokenService;
+import com.pinetechs.orvix.ims.security.JwtUserDetails;
 import com.pinetechs.orvix.ims.config.Config;
 import com.pinetechs.orvix.ims.config.Property;
 import com.pinetechs.orvix.ims.user.dto.UserResponse;
@@ -12,6 +12,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -41,11 +42,12 @@ public class AuthController {
     @PostMapping({"/login", "/web/login"})
     public LoginResponse webLogin(@Valid @RequestBody LoginRequest request, HttpServletResponse response) {
         JwtUserDetails principal = authenticate(request);
-        if (principal.getUser().getAccessChannel() != AccessChannel.WEB) {
+        if (principal.getUser().getAccessChannel() != AccessChannel.WEB && principal.getUser().getAccessChannel() != AccessChannel.BOTH) {
             throw new IllegalArgumentException("User is not allowed to access the web portal");
         }
 
-        String token = jwtTokenService.generateToken(principal.getUser(), AccessChannel.WEB.name());
+
+        String token = jwtTokenService.generateToken(principal.getUser(), principal.getUser().getAccessChannel().name());
         response.addHeader(HttpHeaders.SET_COOKIE, buildJwtCookie(token, config.getProperty(Property.COOKIE_MAX_AGE_SECONDS)).toString());
 
         // Keep token in body for debugging/admin tools, but the web app should depend on cookie.
@@ -74,8 +76,13 @@ public class AuthController {
     }
 
     @GetMapping("/logout")
-    public void logout(HttpServletResponse response) {
-        response.addHeader(HttpHeaders.SET_COOKIE, buildJwtCookie("", 0L).toString());
+    public ResponseEntity<?> logout(HttpServletResponse response) {
+
+        ResponseCookie logoutCookie = buildJwtCookie("", 0L);
+
+        response.addHeader(HttpHeaders.SET_COOKIE, logoutCookie.toString());
+
+       return ResponseEntity.ok(logoutCookie.toString());
     }
 
     private JwtUserDetails authenticate(LoginRequest request) throws BadCredentialsException {

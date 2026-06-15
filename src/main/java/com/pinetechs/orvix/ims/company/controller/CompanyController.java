@@ -1,6 +1,6 @@
 package com.pinetechs.orvix.ims.company.controller;
 
-import com.pinetechs.orvix.ims.auth.security.JwtUserDetails;
+import com.pinetechs.orvix.ims.security.JwtUserDetails;
 import com.pinetechs.orvix.ims.common.ApiResponse;
 import com.pinetechs.orvix.ims.company.dto.CompanyResponse;
 import com.pinetechs.orvix.ims.company.dto.CreateCompanyRequest;

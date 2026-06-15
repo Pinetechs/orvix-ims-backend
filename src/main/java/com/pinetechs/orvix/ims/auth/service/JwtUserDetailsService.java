@@ -1,6 +1,6 @@
 package com.pinetechs.orvix.ims.auth.service;
 
-import com.pinetechs.orvix.ims.auth.security.JwtUserDetails;
+import com.pinetechs.orvix.ims.security.JwtUserDetails;
 import com.pinetechs.orvix.ims.user.entity.User;
 import com.pinetechs.orvix.ims.user.repository.UserRepository;
 import org.springframework.security.core.userdetails.UserDetails;

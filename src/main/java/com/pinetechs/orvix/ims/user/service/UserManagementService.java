@@ -2,12 +2,14 @@ package com.pinetechs.orvix.ims.user.service;
 
 import com.pinetechs.orvix.ims.company.entity.Company;
 import com.pinetechs.orvix.ims.company.repository.CompanyRepository;
+import com.pinetechs.orvix.ims.security.AccessPolicyService;
 import com.pinetechs.orvix.ims.user.dto.CreateUserRequest;
 import com.pinetechs.orvix.ims.user.dto.UpdateUserRequest;
 import com.pinetechs.orvix.ims.user.dto.UserResponse;
 import com.pinetechs.orvix.ims.user.entity.User;
 import com.pinetechs.orvix.ims.user.enums.AccessChannel;
 import com.pinetechs.orvix.ims.user.enums.PermissionCode;
+import com.pinetechs.orvix.ims.user.enums.UserType;
 import com.pinetechs.orvix.ims.user.repository.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,13 +30,13 @@ public class UserManagementService {
     private final UserRepository userRepository;
     private final CompanyRepository companyRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AccessPolicyService accessPolicyService ;
 
-    public UserManagementService(UserRepository userRepository,
-                                 CompanyRepository companyRepository,
-                                 PasswordEncoder passwordEncoder) {
+    public UserManagementService(UserRepository userRepository, CompanyRepository companyRepository, PasswordEncoder passwordEncoder, AccessPolicyService accessPolicyService) {
         this.userRepository = userRepository;
         this.companyRepository = companyRepository;
         this.passwordEncoder = passwordEncoder;
+        this.accessPolicyService = accessPolicyService;
     }
 
     public UserResponse createUser(CreateUserRequest request, User currentUser) {
@@ -88,14 +90,18 @@ public class UserManagementService {
     }
 
     @Transactional(readOnly = true)
-    public Page<UserResponse> getUsers(Pageable pageable, User currentUser) {
-        assertCanManageUsers(currentUser);
-        if (currentUser.isSystemAdmin()) {
-            return userRepository.findByDeletedFalse(pageable).map(UserResponse::from);
+    public Page<UserResponse> getUsers(Pageable pageable, User currentUser , String search , UserType userType , AccessChannel accessChannel ,Boolean status) {
+        accessPolicyService.assertCanViewUser(currentUser);
+
+        if (currentUser.isSystemAdmin() || currentUser.isPintechsStaff()) {
+            return userRepository.findByDeletedFalseAndSearchCriteria(search,userType,accessChannel,status,pageable).map(UserResponse::from);
         }
+
         if (currentUser.getCompanies() == null || currentUser.getCompanies().isEmpty()) {
             throw new AccessDeniedException("Current user is not linked to any company");
         }
+
+
         Set<Long> companyIds = extractCompanyIds(currentUser.getCompanies());
         return userRepository.findDistinctByDeletedFalseAndCompanies_IdIn(companyIds, pageable).map(UserResponse::from);
     }
@@ -123,6 +129,8 @@ public class UserManagementService {
         return userRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
     }
+
+
 
     private void assertCanManageUsers(User currentUser) {
         if (currentUser == null) {

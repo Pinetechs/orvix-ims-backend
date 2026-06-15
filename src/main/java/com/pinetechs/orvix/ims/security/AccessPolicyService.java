@@ -16,6 +16,21 @@ public class AccessPolicyService {
         throw new AccessDeniedException("Only system admin can manage companies");
     }
 
+
+    public void assertCanViewUser(User user) {
+       if (user == null ) {
+           throw new AccessDeniedException("Authentication required");
+       }
+
+        for (PermissionCode permission : user.getPermissions()) {
+            if (permission == PermissionCode.USER_VIEW) {
+                return;
+            }
+        }
+
+        throw new AccessDeniedException("User view permission is required");
+    }
+
     public void assertCanCreateTask(User user, Long companyId, InventoryDomain domain) {
         if (user == null || !user.isSupervisor()) {
             throw new AccessDeniedException("Only supervisor can create inventory tasks");

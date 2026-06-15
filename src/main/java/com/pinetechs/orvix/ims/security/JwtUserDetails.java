@@ -1,4 +1,4 @@
-package com.pinetechs.orvix.ims.auth.security;
+package com.pinetechs.orvix.ims.security;
 
 import com.pinetechs.orvix.ims.user.entity.User;
 import org.springframework.security.core.GrantedAuthority;

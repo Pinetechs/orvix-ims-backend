@@ -1,4 +1,4 @@
-package com.pinetechs.orvix.ims.auth.security;
+package com.pinetechs.orvix.ims.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -50,6 +50,7 @@ public class SecurityConfig {
                                 "/api/auth/web/login",
                                 "/api/auth/mobile/login",
                                 "/api/settings/all",
+                                "/api/settings/**",
                                 "/api/public/**",
                                 "/actuator/health",
                                 "/public/**"

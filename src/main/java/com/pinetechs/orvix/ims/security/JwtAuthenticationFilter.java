@@ -1,4 +1,4 @@
-package com.pinetechs.orvix.ims.auth.security;
+package com.pinetechs.orvix.ims.security;
 
 import com.pinetechs.orvix.ims.auth.service.JwtUserDetailsService;
 import com.pinetechs.orvix.ims.user.enums.AccessChannel;
@@ -34,24 +34,30 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain) throws ServletException, IOException {
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+
+        System.err.println("test");
 
         TokenSource tokenSource = resolveToken(request);
+        System.err.println("1");
+
         if (tokenSource == null || tokenSource.token == null || tokenSource.token.trim().isEmpty()) {
             filterChain.doFilter(request, response);
             return;
         }
+        System.err.println("2");
 
         String username;
         try {
             username = jwtTokenService.getUsernameFromToken(tokenSource.token);
-        } catch (IllegalArgumentException | ExpiredJwtException | SignatureException |
-                 MalformedJwtException | NullPointerException e) {
+            tokenSource.setChannel(jwtTokenService.getAccessChannelFromToken(tokenSource.token));
+        } catch (IllegalArgumentException | ExpiredJwtException | SignatureException | MalformedJwtException | NullPointerException e) {
+
+            System.err.println("Invalid JWT token: " + e.getMessage());
             filterChain.doFilter(request, response);
             return;
         }
+        System.err.println("3");
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             JwtUserDetails userDetails = (JwtUserDetails) userDetailsService.loadUserByUsername(username);
@@ -98,7 +104,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
         for (Cookie cookie : request.getCookies()) {
             if (cookie != null && JWT_COOKIE_NAME.equals(cookie.getName())) {
-                return new TokenSource(cookie.getValue(), AccessChannel.WEB);
+
+                String token = cookie.getValue();
+
+                return new TokenSource(token);
             }
         }
         return null;
@@ -107,8 +116,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private TokenSource resolveBearerToken(HttpServletRequest request) {
         String header = request.getHeader(AUTHORIZATION_HEADER);
         if (header != null && header.startsWith(BEARER_PREFIX)) {
-            return new TokenSource(header.substring(BEARER_PREFIX.length()), AccessChannel.MOBILE);
+
+            String token = header.substring(BEARER_PREFIX.length());
+            return new TokenSource(token);
         }
+
         return null;
     }
 
@@ -120,6 +132,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         AccessChannel userChannel = userDetails.getUser().getAccessChannel();
 
+
+        System.err.println("Token Channel: " + tokenSource.channel + ", User Channel: " + userChannel + ", Request Path: " + path);
+
+        if (tokenSource.channel == AccessChannel.BOTH && userChannel == AccessChannel.BOTH) {
+            return true;
+        }
+
         if (path != null && path.startsWith("/api/mobile/")) {
             return tokenSource.channel == AccessChannel.MOBILE && userChannel == AccessChannel.MOBILE;
         }
@@ -129,10 +148,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static class TokenSource {
         private final String token;
-        private final AccessChannel channel;
+        private  AccessChannel channel;
 
-        private TokenSource(String token, AccessChannel channel) {
+        private TokenSource(String token) {
             this.token = token;
+        }
+
+        public void setChannel(AccessChannel channel) {
             this.channel = channel;
         }
     }

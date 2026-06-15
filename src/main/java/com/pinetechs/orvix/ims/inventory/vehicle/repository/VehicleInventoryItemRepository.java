@@ -17,6 +17,9 @@ public interface VehicleInventoryItemRepository
             String vinNo
     );
 
+
+
+
     List<VehicleInventoryItem> findByInventoryTaskId(Long taskId);
 
     List<VehicleInventoryItem> findByInventoryTaskIdAndStoreNo(

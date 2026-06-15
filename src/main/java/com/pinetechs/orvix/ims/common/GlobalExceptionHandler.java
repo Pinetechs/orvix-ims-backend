@@ -32,9 +32,14 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse> handleAccessDenied(AccessDeniedException ex) {
+
+        System.err.println("AccessDeniedException: " + ex.getLocalizedMessage());
+        List<String> errors = new ArrayList<>();
+        errors.add("Access denied: " + ex.getMessage());
+        String message = errors.isEmpty() ? "Access denied" : String.join(", ", errors);
         return ResponseEntity
                 .status(HttpStatus.FORBIDDEN)
-                .body(ApiResponse.failed("Access denied"));
+                .body(ApiResponse.failed(message));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
