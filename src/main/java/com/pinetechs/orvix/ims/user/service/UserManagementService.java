@@ -1,7 +1,9 @@
 package com.pinetechs.orvix.ims.user.service;
 
+import com.pinetechs.orvix.ims.common.exception.BusinessException;
 import com.pinetechs.orvix.ims.company.entity.Company;
 import com.pinetechs.orvix.ims.company.repository.CompanyRepository;
+import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.security.AccessPolicyService;
 import com.pinetechs.orvix.ims.user.dto.CreateUserRequest;
 import com.pinetechs.orvix.ims.user.dto.UpdateUserRequest;
@@ -14,13 +16,13 @@ import com.pinetechs.orvix.ims.user.repository.UserRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Service
@@ -40,12 +42,23 @@ public class UserManagementService {
     }
 
     public UserResponse createUser(CreateUserRequest request, User currentUser) {
-        assertCanManageUsers(currentUser);
+        accessPolicyService.assertPermission(currentUser, PermissionCode.USER_CREATE, "User create permission is required");
+
+        if (currentUser.getUserType() != UserType.SYSTEM_ADMIN && request.getUserType() == UserType.PINETECHS_SUPPORT_STAFF) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "only pinetechs support staff can create pinetechs support staff users");
+        }
 
         String username = normalizeUsername(request.getUsername());
         if (userRepository.existsByUsernameIgnoreCase(username)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Username already exists");
         }
+
+
+
+
+       if ((currentUser.getUserType() != UserType.SYSTEM_ADMIN && currentUser.getUserType() != UserType.PINETECHS_SUPPORT_STAFF )&& request.getUserType() != UserType.SYSTEM_ADMIN) {
+           throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only system admin can create system admin users");
+       }
 
         User user = new User();
         user.setUsername(username);
@@ -67,12 +80,15 @@ public class UserManagementService {
     }
 
     public UserResponse updateUser(Long id, UpdateUserRequest request, User currentUser) {
-        assertCanManageUsers(currentUser);
+        accessPolicyService.assertPermission(currentUser, PermissionCode.USER_UPDATE, "User update permission is required");
 
         User user = findUser(id);
-        if (user.isSystemAdmin() && !currentUser.isSystemAdmin()) {
-            throw new AccessDeniedException("Only system admin can update system admin users");
+
+        if (user.isPintechsStaff() && !currentUser.isPintechsStaff()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "only pinetechs support staff can update pinetechs support staff users");
         }
+
+
 
         user.setFirstName(trimRequired(request.getFirstName(), "First name"));
         user.setLastName(trimRequired(request.getLastName(), "Last name"));
@@ -90,15 +106,20 @@ public class UserManagementService {
     }
 
     @Transactional(readOnly = true)
-    public Page<UserResponse> getUsers(Pageable pageable, User currentUser , String search , UserType userType , AccessChannel accessChannel ,Boolean status) {
+    public Page<UserResponse> getUsers(Pageable pageable, User currentUser , String search , UserType userType , AccessChannel accessChannel , String domains, Boolean status) {
         accessPolicyService.assertCanViewUser(currentUser);
 
+        Set<InventoryDomain> inventoryDomains = PermissionTemplate.parseInventoryDomains(domains);
+
+
+
+
         if (currentUser.isSystemAdmin() || currentUser.isPintechsStaff()) {
-            return userRepository.findByDeletedFalseAndSearchCriteria(search,userType,accessChannel,status,pageable).map(UserResponse::from);
+            return userRepository.findByDeletedFalseAndSearchCriteria(search,userType,accessChannel,status,inventoryDomains,inventoryDomains == null?false:true,pageable).map(UserResponse::from);
         }
 
         if (currentUser.getCompanies() == null || currentUser.getCompanies().isEmpty()) {
-            throw new AccessDeniedException("Current user is not linked to any company");
+            throw new BusinessException(HttpStatus.FORBIDDEN,"Current user is not linked to any company");
         }
 
 
@@ -107,19 +128,34 @@ public class UserManagementService {
     }
 
     public void disableUser(Long id, User currentUser) {
-        assertCanManageUsers(currentUser);
+        accessPolicyService.assertPermission(currentUser, PermissionCode.USER_DISABLE, "User disable permission is required");
         User user = findUser(id);
-        if (user.isSystemAdmin() && !currentUser.isSystemAdmin()) {
-            throw new AccessDeniedException("Only system admin can disable system admin users");
+        if (user.isPintechsStaff() && !currentUser.isPintechsStaff()) {
+            throw new BusinessException(HttpStatus.FORBIDDEN,"Only pinetechs support staff can disable PineTechs support staff");
         }
         assertUserIsInsideCurrentUserScope(user, currentUser);
         user.setEnabled(false);
         userRepository.save(user);
     }
 
-    public void resetPassword(Long id, String newPassword, User currentUser) {
-        assertCanManageUsers(currentUser);
+    public void enableUser(Long id, User currentUser) {
+        accessPolicyService.assertPermission(currentUser, PermissionCode.USER_DISABLE, "User enable permission is required");
         User user = findUser(id);
+
+        if (user.isPintechsStaff() && !currentUser.isPintechsStaff()) {
+            throw new BusinessException(HttpStatus.FORBIDDEN,"Only pinetechs support staff can enable PineTechs support staff");
+        }
+        assertUserIsInsideCurrentUserScope(user, currentUser);
+        user.setEnabled(true);
+        userRepository.save(user);
+    }
+
+    public void resetPassword(Long id, String newPassword, User currentUser) {
+        accessPolicyService.assertPermission(currentUser, PermissionCode.USER_RESET_PASSWORD, "User reset password permission is required");
+        User user = findUser(id);
+        if (user.isPintechsStaff() && !currentUser.isPintechsStaff()) {
+            throw new BusinessException(HttpStatus.FORBIDDEN,"Only system admin can disable PineTechs support staff");
+        }
         assertUserIsInsideCurrentUserScope(user, currentUser);
         user.setPassword(passwordEncoder.encode(trimRequired(newPassword, "New password")));
         userRepository.save(user);
@@ -132,39 +168,42 @@ public class UserManagementService {
 
 
 
-    private void assertCanManageUsers(User currentUser) {
-        if (currentUser == null) {
-            throw new AccessDeniedException("Authentication required");
-        }
-        if (currentUser.isSystemAdmin() && currentUser.hasPermission(PermissionCode.USER_CREATE)) {
-            return;
-        }
-        throw new AccessDeniedException("Only system admin can manage users");
-    }
+
 
     private void applyCompaniesAndAccess(User user, Set<Long> requestedCompanyIds, User currentUser) {
+
         if (user.isSystemAdmin()) {
             user.getCompanies().clear();
             user.setAccessChannel(AccessChannel.WEB);
             return;
         }
 
-        if (!currentUser.isSystemAdmin()) {
-            throw new AccessDeniedException("Only system admin can assign users to companies");
+        if (user.getUserType() == UserType.PINETECHS_SUPPORT_STAFF) {
+            user.getCompanies().clear();
+            user.setAccessChannel(AccessChannel.BOTH);
+            return;
         }
 
+
+
+
+
+
+
         Set<Long> companyIds = requestedCompanyIds == null ? new HashSet<>() : new HashSet<>(requestedCompanyIds);
+
         if (companyIds.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least one company is required for non-system admin users");
         }
 
         Set<Company> companies = new HashSet<>();
+
+
         for (Long companyId : companyIds) {
             if (companyId == null) {
                 continue;
             }
-            Company company = companyRepository.findById(companyId)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Company not found: " + companyId));
+            Company company = companyRepository.findById(companyId).orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Company not found: " + companyId));
             companies.add(company);
         }
 
@@ -172,6 +211,19 @@ public class UserManagementService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least one valid company is required");
         }
 
+
+       Set<Company> currentUserCompanies = currentUser.getCompanies();
+        if (!currentUser.isSystemAdmin() && !currentUser.isPintechsStaff()) {
+
+            for (Company company : companies) {
+                boolean check = currentUserCompanies.stream().anyMatch(c -> c.getId().equals(company.getId()));
+                if (!check) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current user does not have access to company: " + company.getName());
+                }
+
+
+            }
+        }
         user.setCompanies(companies);
         user.setAccessChannel(user.isInventoryStaff() ? AccessChannel.MOBILE : AccessChannel.WEB);
     }
@@ -215,7 +267,7 @@ public class UserManagementService {
     }
 
     private void assertUserIsInsideCurrentUserScope(User targetUser, User currentUser) {
-        if (currentUser.isSystemAdmin()) {
+        if (currentUser.isSystemAdmin() || currentUser.isPintechsStaff()) {
             return;
         }
         Set<Long> currentCompanyIds = extractCompanyIds(currentUser.getCompanies());
@@ -224,7 +276,7 @@ public class UserManagementService {
                 return;
             }
         }
-        throw new AccessDeniedException("Target user is outside your company scope");
+        throw new BusinessException(HttpStatus.FORBIDDEN,"Target user is outside your company scope");
     }
 
     private Set<Long> extractCompanyIds(Set<Company> companies) {

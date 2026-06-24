@@ -36,16 +36,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
 
-        System.err.println("test");
+
 
         TokenSource tokenSource = resolveToken(request);
-        System.err.println("1");
 
         if (tokenSource == null || tokenSource.token == null || tokenSource.token.trim().isEmpty()) {
             filterChain.doFilter(request, response);
             return;
         }
-        System.err.println("2");
 
         String username;
         try {
@@ -53,11 +51,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             tokenSource.setChannel(jwtTokenService.getAccessChannelFromToken(tokenSource.token));
         } catch (IllegalArgumentException | ExpiredJwtException | SignatureException | MalformedJwtException | NullPointerException e) {
 
-            System.err.println("Invalid JWT token: " + e.getMessage());
             filterChain.doFilter(request, response);
             return;
         }
-        System.err.println("3");
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             JwtUserDetails userDetails = (JwtUserDetails) userDetailsService.loadUserByUsername(username);
@@ -66,6 +62,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 response.sendError(HttpServletResponse.SC_FORBIDDEN, "Invalid access channel");
                 return;
             }
+
+
 
             if (jwtTokenService.validateToken(tokenSource.token, userDetails)
                     && jwtTokenService.validateLastUpdate(tokenSource.token, userDetails.getUser())) {
@@ -78,7 +76,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(authentication);
             }
+            System.out.println("Authenticated user: " + username);
+            System.out.println("Authorities: " + userDetails.getAuthorities());
+
         }
+
 
         filterChain.doFilter(request, response);
     }
@@ -133,7 +135,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         AccessChannel userChannel = userDetails.getUser().getAccessChannel();
 
 
-        System.err.println("Token Channel: " + tokenSource.channel + ", User Channel: " + userChannel + ", Request Path: " + path);
 
         if (tokenSource.channel == AccessChannel.BOTH && userChannel == AccessChannel.BOTH) {
             return true;

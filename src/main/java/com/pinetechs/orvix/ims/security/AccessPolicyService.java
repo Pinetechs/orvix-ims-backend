@@ -1,10 +1,13 @@
 package com.pinetechs.orvix.ims.security;
 
+import com.pinetechs.orvix.ims.common.exception.BusinessException;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.user.entity.User;
 import com.pinetechs.orvix.ims.user.enums.PermissionCode;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class AccessPolicyService {
@@ -30,6 +33,26 @@ public class AccessPolicyService {
 
         throw new AccessDeniedException("User view permission is required");
     }
+
+
+
+
+    public void   assertPermission(User user ,PermissionCode permission , String message){
+
+            if (user == null ) {
+                throw new BusinessException( HttpStatus.UNAUTHORIZED , "Authentication required");
+            }
+
+            for (PermissionCode p : user.getPermissions()) {
+                if (p == permission) {
+                    return;
+                }
+            }
+
+            throw new BusinessException(HttpStatus.UNAUTHORIZED ,message);
+    }
+
+
 
     public void assertCanCreateTask(User user, Long companyId, InventoryDomain domain) {
         if (user == null || !user.isSupervisor()) {

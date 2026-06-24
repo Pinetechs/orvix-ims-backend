@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/users")
@@ -38,7 +39,7 @@ public class UserManagementController {
     @GetMapping
     public Page<UserResponse> getUsers(@RequestParam(name = "page", defaultValue = "0" ,required = false) int page, @RequestParam(name = "size", defaultValue = "20",required = false) int size, @RequestParam(name = "sortBy", defaultValue = "id" ,required = false) String sortBy, @RequestParam(name = "sortOrder", defaultValue = "desc" , required = false) String sortOrder,
                                        @RequestParam (name="search",required = false)String search  , @RequestParam(value = "userType" ,required = false) UserType userType , @RequestParam(name ="accessChannel" ,required = false)AccessChannel accessChannel,
-                                       @RequestParam(name ="status" , required = false) Boolean status,
+                                       @RequestParam(name ="status" , required = false) Boolean status,@RequestParam(name ="inventoryDomains" , required = false) String inventoryDomains,
                                        Authentication authentication) {
 
 
@@ -46,7 +47,7 @@ public class UserManagementController {
         Pageable pageable = PageRequest.of(page, size, sort);
 
 
-        return userManagementService.getUsers(pageable, currentUser(authentication) ,search ,userType,accessChannel ,status);
+        return userManagementService.getUsers(pageable, currentUser(authentication) ,search ,userType,accessChannel,inventoryDomains ,status);
     }
 
 
@@ -54,14 +55,12 @@ public class UserManagementController {
 
     @PostMapping
     public ResponseEntity<UserResponse> createUser(@Valid @RequestBody CreateUserRequest request, Authentication authentication) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(userManagementService.createUser(request, currentUser(authentication)));
+
+        return ResponseEntity.status(HttpStatus.CREATED).body(userManagementService.createUser(request, currentUser(authentication)));
     }
 
     @PutMapping("/{id}")
-    public UserResponse updateUser(@PathVariable Long id,
-                                   @Valid @RequestBody UpdateUserRequest request,
-                                   Authentication authentication) {
+    public UserResponse updateUser(@PathVariable Long id, @Valid @RequestBody UpdateUserRequest request, Authentication authentication) {
         return userManagementService.updateUser(id, request, currentUser(authentication));
     }
 
@@ -72,10 +71,16 @@ public class UserManagementController {
         return ApiResponse.ok("User disabled successfully");
     }
 
+
+    @PutMapping("/{id}/enable")
+    public ApiResponse enableUser(@PathVariable Long id, Authentication authentication) {
+        userManagementService.enableUser(id, currentUser(authentication));
+        return ApiResponse.ok("User enabled successfully");
+    }
+
+
     @PutMapping("/{id}/reset-password")
-    public ApiResponse resetPassword(@PathVariable Long id,
-                                     @Valid @RequestBody ResetPasswordRequest request,
-                                     Authentication authentication) {
+    public ApiResponse resetPassword(@PathVariable Long id, @Valid @RequestBody ResetPasswordRequest request, Authentication authentication) {
         userManagementService.resetPassword(id, request.getNewPassword(), currentUser(authentication));
         return ApiResponse.ok("Password reset successfully");
     }

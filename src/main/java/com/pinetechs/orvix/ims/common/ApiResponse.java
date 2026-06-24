@@ -61,11 +61,22 @@ public class ApiResponse<T> {
         this.message = message;
     }
 
+
     public T getData() {
         return data;
     }
 
     public void setData(T data) {
         this.data = data;
+    }
+
+    @Override
+    public String toString() {
+        final StringBuilder sb = new StringBuilder("ApiResponse{");
+        sb.append("success=").append(success);
+        sb.append(", message='").append(message).append('\'');
+        sb.append(", data=").append(data);
+        sb.append('}');
+        return sb.toString();
     }
 }

@@ -1,5 +1,6 @@
 package com.pinetechs.orvix.ims.common;
 
+import com.pinetechs.orvix.ims.common.exception.BusinessException;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
@@ -8,11 +9,13 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver;
 
 import java.io.IOException;
 import java.text.ParseException;
@@ -20,25 +23,39 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 
-@RestControllerAdvice
+@ControllerAdvice
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ApiResponse> handleResponseStatus(ResponseStatusException ex) {
+        List<String> errors = new ArrayList<>();
+
+        String message = errors.isEmpty() ? ex.getReason() : String.join(", ", errors);
+        ApiResponse response = ApiResponse.failed(message);
+
         return ResponseEntity
                 .status(ex.getStatusCode())
-                .body(ApiResponse.failed(ex.getReason()));
+                .body(ApiResponse.failed(message));
     }
+
+
+
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ApiResponse> handleBadRequestException(BusinessException ex) {
+
+        return ResponseEntity
+                .badRequest()
+                .body(ApiResponse.failed(ex.getMessage()));
+    }
+
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse> handleAccessDenied(AccessDeniedException ex) {
 
-        System.err.println("AccessDeniedException: " + ex.getLocalizedMessage());
         List<String> errors = new ArrayList<>();
-        errors.add("Access denied: " + ex.getMessage());
         String message = errors.isEmpty() ? "Access denied" : String.join(", ", errors);
         return ResponseEntity
-                .status(HttpStatus.FORBIDDEN)
+                .status(HttpStatus.UNAUTHORIZED)
                 .body(ApiResponse.failed(message));
     }
 
@@ -80,7 +97,6 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse> handleIllegalArgumentException(IllegalArgumentException ex) {
-        System.err.println("IllegalArgumentException: " + ex.getMessage());
         return ResponseEntity
                 .badRequest()
                 .body(ApiResponse.failed("Invalid argument: " + ex.getMessage()));

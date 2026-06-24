@@ -113,4 +113,25 @@ public final class PermissionTemplate {
             permissions.add(PermissionCode.SPARE_PART_REPORT_VIEW);
         }
     }
+
+    public static Set<InventoryDomain> parseInventoryDomains(String domains) {
+        if (domains == null || domains.isEmpty()) {
+            return null;
+        }
+
+
+        Set<InventoryDomain> result = new HashSet<>();
+        String[] domainArray = domains.split(",");
+        for (String domain : domainArray) {
+            try {
+                result.add(InventoryDomain.valueOf(domain.trim().toUpperCase()));
+            } catch (IllegalArgumentException e) {
+                // Ignore invalid domain values
+            }
+        }
+        if (result.isEmpty()) {
+            return null;
+        }
+        return result;
+    }
 }

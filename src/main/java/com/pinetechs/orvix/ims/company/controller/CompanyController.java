@@ -37,8 +37,7 @@ public class CompanyController {
     }
 
     @GetMapping
-    public Page<CompanyResponse> getAll(@RequestParam(name = "page", defaultValue = "0") int page,
-                                        @RequestParam(name = "size", defaultValue = "20") int size,
+    public Page<CompanyResponse> getAll(@RequestParam(name = "page", defaultValue = "0") int page, @RequestParam(name = "size", defaultValue = "20") int size,
                                         @RequestParam(name = "sortBy", defaultValue = "id") String sortBy,
                                         @RequestParam(name = "sortOrder", defaultValue = "desc") String sortOrder,
                                         Authentication authentication) {
@@ -54,6 +53,7 @@ public class CompanyController {
     }
 
     private com.pinetechs.orvix.ims.user.entity.User currentUser(Authentication authentication) {
+        System.err.println("Authentication Principal: " + authentication.getPrincipal());
         return ((JwtUserDetails) authentication.getPrincipal()).getUser();
     }
 }

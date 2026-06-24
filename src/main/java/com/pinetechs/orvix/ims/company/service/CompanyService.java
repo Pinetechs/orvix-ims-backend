@@ -1,35 +1,37 @@
 package com.pinetechs.orvix.ims.company.service;
 
+import com.pinetechs.orvix.ims.common.exception.BusinessException;
 import com.pinetechs.orvix.ims.company.dto.CompanyResponse;
 import com.pinetechs.orvix.ims.company.dto.CreateCompanyRequest;
 import com.pinetechs.orvix.ims.company.dto.UpdateCompanyRequest;
 import com.pinetechs.orvix.ims.company.entity.Company;
 import com.pinetechs.orvix.ims.company.repository.CompanyRepository;
+import com.pinetechs.orvix.ims.security.AccessPolicyService;
 import com.pinetechs.orvix.ims.user.entity.User;
 import com.pinetechs.orvix.ims.user.enums.PermissionCode;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @Transactional
 public class CompanyService {
 
     private final CompanyRepository companyRepository;
+    private final AccessPolicyService accessPolicyService;
 
-    public CompanyService(CompanyRepository companyRepository) {
+    public CompanyService(CompanyRepository companyRepository, AccessPolicyService accessPolicyService) {
         this.companyRepository = companyRepository;
+        this.accessPolicyService = accessPolicyService;
     }
 
     public CompanyResponse create(CreateCompanyRequest request, User currentUser) {
-        requireSystemAdmin(currentUser, PermissionCode.COMPANY_CREATE);
+        accessPolicyService.assertPermission(currentUser, PermissionCode.COMPANY_CREATE, "User does not have permission to create a company");
         String code = normalizeCode(request.getCode());
         if (companyRepository.existsByCodeIgnoreCase(code)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Company code already exists");
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Company code already exists");
         }
         Company company = new Company();
         company.setCode(code);
@@ -48,7 +50,7 @@ public class CompanyService {
 
     @Transactional(readOnly = true)
     public Page<CompanyResponse> getAll(Pageable pageable, User currentUser) {
-        requireSystemAdmin(currentUser, PermissionCode.COMPANY_VIEW);
+        accessPolicyService.assertPermission(currentUser, PermissionCode.COMPANY_VIEW, "User does not have permission to view companies");
         return companyRepository.findAll(pageable).map(CompanyResponse::from);
     }
 
@@ -61,18 +63,18 @@ public class CompanyService {
 
     private Company findCompany(Long id) {
         return companyRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Company not found"));
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Company not found"));
     }
 
     private void requireSystemAdmin(User user, PermissionCode permission) {
         if (user == null || !user.isSystemAdmin() || !user.hasPermission(permission)) {
-            throw new AccessDeniedException("System admin permission is required");
+            throw new BusinessException(HttpStatus.FORBIDDEN,"System admin permission is required");
         }
     }
 
     private String normalizeCode(String code) { return trimRequired(code, "Code").toUpperCase(); }
     private String trimRequired(String value, String field) {
-        if (value == null || value.trim().isEmpty()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, field + " is required");
+        if (value == null || value.trim().isEmpty()) throw new BusinessException(HttpStatus.BAD_REQUEST, field + " is required");
         return value.trim();
     }
     private String trimToNull(String value) { return value == null || value.trim().isEmpty() ? null : value.trim(); }
