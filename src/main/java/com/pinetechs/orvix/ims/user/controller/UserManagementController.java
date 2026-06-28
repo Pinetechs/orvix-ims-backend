@@ -1,6 +1,6 @@
 package com.pinetechs.orvix.ims.user.controller;
 
-import com.pinetechs.orvix.ims.security.JwtUserDetails;
+import com.pinetechs.orvix.ims.common.service.Helper;
 import com.pinetechs.orvix.ims.common.ApiResponse;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.user.dto.CreateUserRequest;
@@ -23,16 +23,17 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 
 @RestController
 @RequestMapping("/api/users")
 public class UserManagementController {
 
     private final UserManagementService userManagementService;
+    private final Helper helper;
 
-    public UserManagementController(UserManagementService userManagementService) {
+    public UserManagementController(UserManagementService userManagementService, Helper helper) {
         this.userManagementService = userManagementService;
+        this.helper = helper;
     }
 
 
@@ -47,7 +48,7 @@ public class UserManagementController {
         Pageable pageable = PageRequest.of(page, size, sort);
 
 
-        return userManagementService.getUsers(pageable, currentUser(authentication) ,search ,userType,accessChannel,inventoryDomains ,status);
+        return userManagementService.getUsers(pageable, helper.currentUser(authentication) ,search ,userType,accessChannel,inventoryDomains ,status);
     }
 
 
@@ -56,32 +57,32 @@ public class UserManagementController {
     @PostMapping
     public ResponseEntity<UserResponse> createUser(@Valid @RequestBody CreateUserRequest request, Authentication authentication) {
 
-        return ResponseEntity.status(HttpStatus.CREATED).body(userManagementService.createUser(request, currentUser(authentication)));
+        return ResponseEntity.status(HttpStatus.CREATED).body(userManagementService.createUser(request, helper.currentUser(authentication)));
     }
 
     @PutMapping("/{id}")
     public UserResponse updateUser(@PathVariable Long id, @Valid @RequestBody UpdateUserRequest request, Authentication authentication) {
-        return userManagementService.updateUser(id, request, currentUser(authentication));
+        return userManagementService.updateUser(id, request, helper.currentUser(authentication));
     }
 
 
     @PutMapping("/{id}/disable")
     public ApiResponse disableUser(@PathVariable Long id, Authentication authentication) {
-        userManagementService.disableUser(id, currentUser(authentication));
+        userManagementService.disableUser(id, helper.currentUser(authentication));
         return ApiResponse.ok("User disabled successfully");
     }
 
 
     @PutMapping("/{id}/enable")
     public ApiResponse enableUser(@PathVariable Long id, Authentication authentication) {
-        userManagementService.enableUser(id, currentUser(authentication));
+        userManagementService.enableUser(id, helper.currentUser(authentication));
         return ApiResponse.ok("User enabled successfully");
     }
 
 
     @PutMapping("/{id}/reset-password")
     public ApiResponse resetPassword(@PathVariable Long id, @Valid @RequestBody ResetPasswordRequest request, Authentication authentication) {
-        userManagementService.resetPassword(id, request.getNewPassword(), currentUser(authentication));
+        userManagementService.resetPassword(id, request.getNewPassword(), helper.currentUser(authentication));
         return ApiResponse.ok("Password reset successfully");
     }
 
@@ -94,7 +95,5 @@ public class UserManagementController {
     @GetMapping("/inventory-domains")
     public List<InventoryDomain> getInventoryDomains() { return Arrays.asList(InventoryDomain.values()); }
 
-    private com.pinetechs.orvix.ims.user.entity.User currentUser(Authentication authentication) {
-        return ((JwtUserDetails) authentication.getPrincipal()).getUser();
-    }
+
 }

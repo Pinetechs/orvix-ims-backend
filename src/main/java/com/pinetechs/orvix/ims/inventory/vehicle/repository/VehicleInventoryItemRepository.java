@@ -2,7 +2,13 @@ package com.pinetechs.orvix.ims.inventory.vehicle.repository;
 
 import com.pinetechs.orvix.ims.inventory.vehicle.entity.VehicleInventoryItem;
 import com.pinetechs.orvix.ims.inventory.vehicle.enums.VehicleInventoryItemStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Range;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -49,4 +55,17 @@ public interface VehicleInventoryItemRepository
             String storeNo,
             VehicleInventoryItemStatus status
     );
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+           delete from VehicleInventoryItem i
+           where i.inventoryTask.id = :taskId
+           """)
+    int deleteByTaskId(@Param("taskId") Long taskId);
+
+
+
+    Page<VehicleInventoryItem> findByInventoryTaskIdOrderByIdAsc(Long taskId, Pageable pageable);
+
+
 }

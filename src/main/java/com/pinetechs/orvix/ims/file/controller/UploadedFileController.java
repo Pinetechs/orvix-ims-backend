@@ -19,10 +19,8 @@ public class UploadedFileController {
     }
 
     @PostMapping("/upload")
-    public UploadedFileResponse upload(@RequestParam("file") MultipartFile file,
-                                       @RequestParam(name = "folder", required = false) String folder,
-                                       @RequestParam(name = "temp", defaultValue = "true") boolean temp) throws IOException {
-        UploadedFile uploadedFile = uploadedFileService.upload(file, folder, temp);
+    public UploadedFileResponse upload(@RequestParam("file") MultipartFile file, @RequestParam(name = "folder", required = false) String folder, @RequestParam(name = "temp", defaultValue = "true") boolean temp) throws IOException {
+        UploadedFile uploadedFile = uploadedFileService.upload(file, folder, temp,true);
         return UploadedFileResponse.from(uploadedFile);
     }
 }

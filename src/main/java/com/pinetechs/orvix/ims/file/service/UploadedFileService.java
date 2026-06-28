@@ -15,7 +15,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -30,34 +33,69 @@ public class UploadedFileService {
         this.config = config;
     }
 
-    public UploadedFile upload(MultipartFile multipartFile, String folderName, boolean temp) throws IOException {
+    public UploadedFile uploadExcel(
+            MultipartFile multipartFile,
+            String folderName,
+            boolean temp,
+            boolean publicFile
+    ) throws IOException {
+        validateAllowedExtensions(multipartFile, Set.of("xls", "xlsx"));
+        return upload(multipartFile, folderName, temp, publicFile);
+    }
+
+    public UploadedFile upload(
+            MultipartFile multipartFile,
+            String folderName,
+            boolean temp,
+            boolean publicFile
+    ) throws IOException {
+
+        String directoryPath = publicFile
+                ? WebMvcConfig.getPublicDirectory()
+                : WebMvcConfig.getPrivateDirectory();
+
+        String publicUrl = publicFile ? "/public/" : "/private/";
+
         if (multipartFile == null || multipartFile.isEmpty()) {
             throw new IllegalArgumentException("File is required");
         }
 
         validateFileSize(multipartFile);
 
-        String safeFolder = normalizeFolder(folderName == null || folderName.trim().isEmpty()
-                ? config.getProperty(Property.FILE_UPLOAD_DIR)
-                : folderName);
+        String safeFolder = normalizeFolder(
+                folderName == null || folderName.trim().isEmpty()
+                        ? config.getProperty(Property.FILE_UPLOAD_DIR)
+                        : folderName
+        );
 
-        String originalFileName = StringUtils.cleanPath(multipartFile.getOriginalFilename() == null ? "file" : multipartFile.getOriginalFilename());
+        String originalFileName = StringUtils.cleanPath(
+                multipartFile.getOriginalFilename() == null
+                        ? "file"
+                        : multipartFile.getOriginalFilename()
+        );
+
         String extension = extractExtension(originalFileName);
         String generatedName = UUID.randomUUID() + extension;
 
-        File targetDirectory = new File(WebMvcConfig.getPublicDirectory(), safeFolder);
+        File targetDirectory = new File(directoryPath, safeFolder);
+
         if (!targetDirectory.exists() && !targetDirectory.mkdirs()) {
             throw new IOException("Could not create upload directory");
         }
 
         Path targetPath = new File(targetDirectory, generatedName).toPath();
-        Files.copy(multipartFile.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING);
+
+        Files.copy(
+                multipartFile.getInputStream(),
+                targetPath,
+                StandardCopyOption.REPLACE_EXISTING
+        );
 
         UploadedFile uploadedFile = new UploadedFile();
         uploadedFile.setFileName(generatedName);
         uploadedFile.setOriginalFileName(originalFileName);
         uploadedFile.setFilePath(targetPath.toAbsolutePath().toString());
-        uploadedFile.setPublicUrl("/public/" + safeFolder + generatedName);
+        uploadedFile.setPublicUrl(publicUrl + safeFolder + generatedName);
         uploadedFile.setContentType(multipartFile.getContentType());
         uploadedFile.setExtension(extension.replace(".", ""));
         uploadedFile.setFileSize(multipartFile.getSize());
@@ -73,29 +111,97 @@ public class UploadedFileService {
         return uploadedFileRepository.findByIdInAndDeletedFalse(ids);
     }
 
+    public void markAsDeleted(Long uploadedFileId) {
+        if (uploadedFileId == null) {
+            return;
+        }
+
+        uploadedFileRepository.findById(uploadedFileId).ifPresent(file -> {
+            file.setDeleted(true);
+            file.setDeletedAt(LocalDateTime.now());
+            uploadedFileRepository.save(file);
+        });
+    }
+
+    public boolean deletePhysicalFile(Long uploadedFileId) throws IOException {
+        if (uploadedFileId == null) {
+            return false;
+        }
+
+        UploadedFile file = uploadedFileRepository.findById(uploadedFileId).orElse(null);
+
+        if (file == null) {
+            return false;
+        }
+
+        boolean deletedFromDisk = false;
+
+        if (file.getFilePath() != null && !file.getFilePath().isBlank()) {
+            Path path = Path.of(file.getFilePath());
+            deletedFromDisk = Files.deleteIfExists(path);
+        }
+
+        file.setDeleted(true);
+        file.setDeletedAt(LocalDateTime.now());
+        uploadedFileRepository.save(file);
+
+        return deletedFromDisk;
+    }
+
     private void validateFileSize(MultipartFile file) {
         Integer maxFileSizeMb = config.getProperty(Property.MAX_FILE_SIZE_MB);
         long maxBytes = (maxFileSizeMb == null ? 50L : maxFileSizeMb.longValue()) * 1024L * 1024L;
+
         if (file.getSize() > maxBytes) {
             throw new IllegalArgumentException("File size exceeds maximum allowed size");
         }
     }
 
+    private void validateAllowedExtensions(MultipartFile file, Set<String> allowedExtensions) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("File is required");
+        }
+
+        String originalFileName = file.getOriginalFilename();
+
+        if (originalFileName == null || originalFileName.isBlank()) {
+            throw new IllegalArgumentException("File name is required");
+        }
+
+        String extension = extractExtension(originalFileName)
+                .replace(".", "")
+                .toLowerCase(Locale.ROOT);
+
+        if (extension.isBlank() || !allowedExtensions.contains(extension)) {
+            throw new IllegalArgumentException("Only Excel files are allowed: .xls, .xlsx");
+        }
+    }
+
     private String normalizeFolder(String folder) {
         String value = folder.replace("\\", "/").trim();
-        while (value.startsWith("/")) value = value.substring(1);
-        if (!value.endsWith("/")) value = value + "/";
+
+        while (value.startsWith("/")) {
+            value = value.substring(1);
+        }
+
+        if (!value.endsWith("/")) {
+            value = value + "/";
+        }
+
         if (value.contains("..")) {
             throw new IllegalArgumentException("Invalid folder path");
         }
+
         return value;
     }
 
     private String extractExtension(String fileName) {
         int index = fileName.lastIndexOf('.');
+
         if (index < 0) {
             return "";
         }
-        return fileName.substring(index).toLowerCase();
+
+        return fileName.substring(index).toLowerCase(Locale.ROOT);
     }
 }

@@ -1,6 +1,6 @@
 package com.pinetechs.orvix.ims.company.controller;
 
-import com.pinetechs.orvix.ims.security.JwtUserDetails;
+import com.pinetechs.orvix.ims.common.service.Helper;
 import com.pinetechs.orvix.ims.common.ApiResponse;
 import com.pinetechs.orvix.ims.company.dto.CompanyResponse;
 import com.pinetechs.orvix.ims.company.dto.CreateCompanyRequest;
@@ -21,19 +21,21 @@ import org.springframework.web.bind.annotation.*;
 public class CompanyController {
 
     private final CompanyService companyService;
+    private final Helper helper ;
 
-    public CompanyController(CompanyService companyService) {
+    public CompanyController(CompanyService companyService, Helper helper) {
         this.companyService = companyService;
+        this.helper = helper;
     }
 
     @PostMapping
     public ResponseEntity<CompanyResponse> create(@Valid @RequestBody CreateCompanyRequest request, Authentication authentication) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(companyService.create(request, currentUser(authentication)));
+        return ResponseEntity.status(HttpStatus.CREATED).body(companyService.create(request, helper.currentUser(authentication)));
     }
 
     @PutMapping("/{id}")
     public CompanyResponse update(@PathVariable Long id, @Valid @RequestBody UpdateCompanyRequest request, Authentication authentication) {
-        return companyService.update(id, request, currentUser(authentication));
+        return companyService.update(id, request, helper.currentUser(authentication));
     }
 
     @GetMapping
@@ -43,17 +45,14 @@ public class CompanyController {
                                         Authentication authentication) {
         Sort sort = "asc".equalsIgnoreCase(sortOrder) ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
-        return companyService.getAll(pageable, currentUser(authentication));
+        return companyService.getAll(pageable, helper.currentUser(authentication));
     }
 
     @PutMapping("/{id}/disable")
     public ApiResponse disable(@PathVariable Long id, Authentication authentication) {
-        companyService.disable(id, currentUser(authentication));
+        companyService.disable(id, helper.currentUser(authentication));
         return ApiResponse.ok("Company disabled successfully");
     }
 
-    private com.pinetechs.orvix.ims.user.entity.User currentUser(Authentication authentication) {
-        System.err.println("Authentication Principal: " + authentication.getPrincipal());
-        return ((JwtUserDetails) authentication.getPrincipal()).getUser();
-    }
+
 }

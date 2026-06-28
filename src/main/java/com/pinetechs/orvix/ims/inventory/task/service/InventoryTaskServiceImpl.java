@@ -4,9 +4,11 @@ import com.pinetechs.orvix.ims.company.entity.Company;
 import com.pinetechs.orvix.ims.company.repository.CompanyRepository;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryTaskStatus;
+import com.pinetechs.orvix.ims.inventory.task.dto.CreateInventoryTaskRequest;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskRepository;
 import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskService;
+import com.pinetechs.orvix.ims.security.AccessPolicyService;
 import com.pinetechs.orvix.ims.user.entity.User;
 import com.pinetechs.orvix.ims.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
@@ -22,30 +24,33 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
     private final InventoryTaskRepository inventoryTaskRepository;
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
+    private final AccessPolicyService accessPolicyService ;
+
 
     public InventoryTaskServiceImpl(
             InventoryTaskRepository inventoryTaskRepository,
             CompanyRepository companyRepository,
-            UserRepository userRepository
-    ) {
+            UserRepository userRepository,
+            AccessPolicyService accessPolicyService) {
         this.inventoryTaskRepository = inventoryTaskRepository;
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
+        this.accessPolicyService = accessPolicyService;
     }
 
     @Override
-    public InventoryTask createVehicleTask(Long companyId, Long createdByUserId, String notes) {
-        Company company = companyRepository.findById(companyId).orElseThrow(() -> new RuntimeException("Company not found"));
-        User createdBy = userRepository.findById(createdByUserId).orElseThrow(() -> new RuntimeException("User not found"));
-
+    public InventoryTask createTask(CreateInventoryTaskRequest createInventoryTaskRequest, User currentUser) {
+        InventoryDomain inventoryDomain =    InventoryDomain.valueOf(createInventoryTaskRequest.getInventoryDomain().toUpperCase());
+        Company company = companyRepository.findById(createInventoryTaskRequest.getCompanyId()).orElseThrow(() -> new RuntimeException("Company not found"));
+        accessPolicyService.assertCanCreateTask(currentUser, company.getId(), inventoryDomain);
         InventoryTask task = new InventoryTask();
         task.setTaskNumber(generateTaskNumber());
         task.setCompany(company);
-        task.setCreatedBy(createdBy);
-        task.setInventoryDomain(InventoryDomain.VEHICLE);
+        task.setCreatedBy(currentUser);
+        task.setInventoryDomain(inventoryDomain);
         task.setStatus(InventoryTaskStatus.DRAFT);
-        task.setNotes(notes);
-
+        task.setTaskName(createInventoryTaskRequest.getTaskName());
+        task.setDescription(createInventoryTaskRequest.getDescription());
         return inventoryTaskRepository.save(task);
     }
 

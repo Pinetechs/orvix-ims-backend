@@ -31,6 +31,15 @@ public class InventoryTask {
     @Column(name = "task_number", nullable = false, unique = true, length = 100)
     private String taskNumber;
 
+
+    @Column(name = "task_name", nullable = false, length = 255)
+    private String taskName;
+
+
+    @Column(name = "description", length = 1000)
+    private String description;
+
+
     @Enumerated(EnumType.STRING)
     @Column(name = "inventory_domain", nullable = false, length = 50)
     private InventoryDomain inventoryDomain;
@@ -78,6 +87,8 @@ public class InventoryTask {
     @Column(name = "notes", length = 1000)
     private String notes;
 
+
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -116,6 +127,22 @@ public class InventoryTask {
 
     public String getPauseReason() {
         return pauseReason;
+    }
+
+    public String getTaskName() {
+        return taskName;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public void setTaskName(String taskName) {
+        this.taskName = taskName;
     }
 
     public void setPauseReason(String pauseReason) {

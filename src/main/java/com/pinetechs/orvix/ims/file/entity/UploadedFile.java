@@ -47,6 +47,9 @@ public class UploadedFile {
     @Column(name = "is_temp", nullable = false)
     private Boolean temp = true;
 
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -59,25 +62,39 @@ public class UploadedFile {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+
     public String getFileName() { return fileName; }
     public void setFileName(String fileName) { this.fileName = fileName; }
+
     public String getOriginalFileName() { return originalFileName; }
     public void setOriginalFileName(String originalFileName) { this.originalFileName = originalFileName; }
+
     public String getFilePath() { return filePath; }
     public void setFilePath(String filePath) { this.filePath = filePath; }
+
     public String getPublicUrl() { return publicUrl; }
     public void setPublicUrl(String publicUrl) { this.publicUrl = publicUrl; }
+
     public String getContentType() { return contentType; }
     public void setContentType(String contentType) { this.contentType = contentType; }
+
     public String getExtension() { return extension; }
     public void setExtension(String extension) { this.extension = extension; }
+
     public Long getFileSize() { return fileSize; }
     public void setFileSize(Long fileSize) { this.fileSize = fileSize; }
+
     public String getUploadFolderName() { return uploadFolderName; }
     public void setUploadFolderName(String uploadFolderName) { this.uploadFolderName = uploadFolderName; }
+
     public Boolean getDeleted() { return deleted; }
     public void setDeleted(Boolean deleted) { this.deleted = deleted; }
+
     public Boolean getTemp() { return temp; }
     public void setTemp(Boolean temp) { this.temp = temp; }
+
+    public LocalDateTime getDeletedAt() { return deletedAt; }
+    public void setDeletedAt(LocalDateTime deletedAt) { this.deletedAt = deletedAt; }
+
     public LocalDateTime getCreatedAt() { return createdAt; }
 }

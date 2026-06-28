@@ -35,6 +35,8 @@ public enum Property {
     MAIL_SMTP_STARTTLS_REQUIRED("mail_smtp_starttls_required", "false", String.class),
     MAIL_SMTP_SSL_TRUST("mail_smtp_ssl_trust", "mail.pinetechs.com", String.class),
     MAIL_SMTP_SSL_ENABLE("mail_smtp_ssl_enable", "true", String.class),
+    BACKGROUND_JOB_ENABLED("background_job_enabled", "true", Boolean.class),
+    BACKGROUND_BATCH_SIZE("background_batch_size", "20", Integer.class),
     MAIL_DEBUG("mail_debug", "false", String.class);
 
     private final String name;

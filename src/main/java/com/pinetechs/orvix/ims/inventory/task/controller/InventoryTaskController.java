@@ -1,10 +1,12 @@
 package com.pinetechs.orvix.ims.inventory.task.controller;
 
+import com.pinetechs.orvix.ims.common.service.Helper;
 import com.pinetechs.orvix.ims.inventory.task.dto.CreateInventoryTaskRequest;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskService;
 import com.pinetechs.orvix.ims.inventory.vehicle.dto.VehicleInventoryImportResult;
 import com.pinetechs.orvix.ims.inventory.vehicle.service.VehicleInventoryImportService;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -14,28 +16,28 @@ public class InventoryTaskController {
 
     private final InventoryTaskService inventoryTaskService;
     private final VehicleInventoryImportService vehicleInventoryImportService;
+    private final Helper helper ;
 
-    public InventoryTaskController(InventoryTaskService inventoryTaskService, VehicleInventoryImportService vehicleInventoryImportService) {
+    public InventoryTaskController(InventoryTaskService inventoryTaskService, VehicleInventoryImportService vehicleInventoryImportService, Helper helper) {
         this.inventoryTaskService = inventoryTaskService;
         this.vehicleInventoryImportService = vehicleInventoryImportService;
+        this.helper = helper;
     }
 
-    @PostMapping("/vehicle")
-    public InventoryTask createVehicleTask(
-            @RequestBody CreateInventoryTaskRequest request) {
 
-        Long currentUserId = 1L; // لاحقاً من JWT
 
-        return inventoryTaskService.createVehicleTask(request.getCompanyId(), currentUserId, request.getNotes());
+    @PostMapping
+    public InventoryTask createTask(
+            @RequestBody CreateInventoryTaskRequest request , Authentication authentication) {
+
+        return inventoryTaskService.createTask(request, helper.currentUser(authentication));
     }
 
-    @PostMapping("/{taskId}/import")
-    public VehicleInventoryImportResult importVehicleExcel(@PathVariable Long taskId, @RequestParam("file") MultipartFile file) {
 
-        Long currentUserId = 1L; // لاحقاً من JWT
 
-        return vehicleInventoryImportService.importExcel(taskId, file, currentUserId);
-    }
+
+
+
 
     @PostMapping("/{taskId}/start")
     public InventoryTask startTask(@PathVariable Long taskId) {

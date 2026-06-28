@@ -58,4 +58,14 @@ public class WebMvcConfig implements WebMvcConfigurer {
         }
         return dir.getAbsolutePath();
     }
+
+
+
+    public static String getPrivateDirectory() {
+        File dir = new File("../Private");
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+        return dir.getAbsolutePath();
+    }
 }

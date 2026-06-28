@@ -47,6 +47,8 @@ public class AccessPolicyService {
                 if (p == permission) {
                     return;
                 }
+
+
             }
 
             throw new BusinessException(HttpStatus.UNAUTHORIZED ,message);
@@ -54,19 +56,97 @@ public class AccessPolicyService {
 
 
 
+
+    public void assertCanViewInventoryTask(User user, Long companyId, InventoryDomain domain) {
+        if (user == null){
+            throw new BusinessException(HttpStatus.UNAUTHORIZED,"Authentication required");
+        }
+
+        PermissionCode permissionCode = taskViewPermission(domain);
+
+        for (PermissionCode permission : user.getPermissions()) {
+            if (permission == permissionCode) {
+                // this for supervisor, if he has permission to create task, but he is not assigned to any company, then he should not be allowed to create task
+                if (user.getCompanies().isEmpty()) {
+                    return;
+                }
+
+                if (user.hasCompany(companyId)) {
+                    return;
+                } else {
+                    throw new BusinessException(HttpStatus.BAD_REQUEST, "User is not allowed to view this task for this company");
+                }
+            }
+        }
+
+        throw new BusinessException(HttpStatus.BAD_REQUEST, "User is not allowed to view this task for this company");
+
+    }
+
+
+    public void assertCanImportExcel(User user, Long companyId, InventoryDomain domain) {
+        if (user == null){
+            throw new BusinessException(HttpStatus.UNAUTHORIZED,"Authentication required");
+        }
+        PermissionCode permissionCode = taskUpdatePermission(domain);
+        for (PermissionCode permission : user.getPermissions()) {
+            if (permission == permissionCode ) {
+                // this for supervisor, if he has permission to create task, but he is not assigned to any company, then he should not be allowed to create task
+                if (user.getCompanies().isEmpty()){
+                    return;
+                }
+
+
+                if (user.hasCompany(companyId)) {
+                    return;
+                } else {
+                    throw new BusinessException(HttpStatus.BAD_REQUEST,"User is not allowed to import excel for this company");
+                }
+
+
+            }
+
+        }
+        throw new BusinessException(HttpStatus.BAD_REQUEST,"User is not allowed to import excel for this company");
+
+
+    }
+
+
     public void assertCanCreateTask(User user, Long companyId, InventoryDomain domain) {
-        if (user == null || !user.isSupervisor()) {
-            throw new AccessDeniedException("Only supervisor can create inventory tasks");
+
+
+        if (user == null){
+            throw new BusinessException(HttpStatus.UNAUTHORIZED,"Authentication required");
         }
-        if (!user.hasCompany(companyId)) {
-            throw new AccessDeniedException("Supervisor is not allowed to work on this company");
+
+        PermissionCode permissionCode = taskCreatePermission(domain);
+
+
+
+
+        for (PermissionCode permission : user.getPermissions())  {
+
+
+            if (permission == permissionCode ) {
+
+                // this for supervisor, if he has permission to create task, but he is not assigned to any company, then he should not be allowed to create task
+                if (user.getCompanies().isEmpty()){
+                    return;
+                }
+
+                if (user.hasCompany(companyId)) {
+                    return;
+                } else {
+                    throw new BusinessException(HttpStatus.BAD_REQUEST,"User is not allowed to create this task for this company");
+                }
+
+            }
+
         }
-        if (!user.hasInventoryDomain(domain)) {
-            throw new AccessDeniedException("Supervisor is not allowed to manage this inventory domain");
-        }
-        if (!user.hasPermission(taskCreatePermission(domain))) {
-            throw new AccessDeniedException("Task create permission is required");
-        }
+
+        throw new BusinessException(HttpStatus.BAD_REQUEST,"User is not allowed to create this task");
+
     }
 
     public void assertCanViewReport(User user, Long companyId, InventoryDomain domain) {
@@ -107,9 +187,26 @@ public class AccessPolicyService {
         return PermissionCode.SPARE_PART_TASK_CREATE;
     }
 
+
+    private PermissionCode taskViewPermission(InventoryDomain domain) {
+        if (domain == InventoryDomain.VEHICLE) return PermissionCode.VEHICLE_TASK_VIEW;
+        if (domain == InventoryDomain.ASSET) return PermissionCode.ASSET_TASK_VIEW;
+        return PermissionCode.SPARE_PART_TASK_VIEW;
+    }
+
+
+    private PermissionCode taskUpdatePermission(InventoryDomain domain) {
+        if (domain == InventoryDomain.VEHICLE) return PermissionCode.VEHICLE_TASK_UPDATE;
+        if (domain == InventoryDomain.ASSET) return PermissionCode.ASSET_TASK_UPDATE;
+        return PermissionCode.SPARE_PART_TASK_UPDATE;
+    }
+
     private PermissionCode reportPermission(InventoryDomain domain) {
         if (domain == InventoryDomain.VEHICLE) return PermissionCode.VEHICLE_REPORT_VIEW;
         if (domain == InventoryDomain.ASSET) return PermissionCode.ASSET_REPORT_VIEW;
         return PermissionCode.SPARE_PART_REPORT_VIEW;
     }
+
+
+
 }

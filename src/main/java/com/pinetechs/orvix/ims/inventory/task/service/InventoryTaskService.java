@@ -1,11 +1,13 @@
 package com.pinetechs.orvix.ims.inventory.task.service;
 
+import com.pinetechs.orvix.ims.inventory.task.dto.CreateInventoryTaskRequest;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
+import com.pinetechs.orvix.ims.user.entity.User;
 
 
-    public interface InventoryTaskService {
+public interface InventoryTaskService {
 
-        InventoryTask createVehicleTask(Long companyId, Long createdByUserId, String notes);
+        InventoryTask createTask(CreateInventoryTaskRequest createInventoryTaskRequest, User currentUser);
 
         InventoryTask startTask(Long taskId);
 

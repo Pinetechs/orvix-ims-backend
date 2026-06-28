@@ -1,6 +1,10 @@
 package com.pinetechs.orvix.ims.inventory.common.enums;
 
 public enum InventoryTaskStatus {
+
+    IMPORT_PENDING,
+    IMPORT_IN_PROGRESS,
+    IMPORT_FAILED,
     DRAFT,
 
     READY_FOR_ASSIGNMENT,
