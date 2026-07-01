@@ -9,7 +9,7 @@ import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryTaskStatus;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskRepository;
-import com.pinetechs.orvix.ims.inventory.vehicle.controller.VehicleInventoryItemResponse;
+import com.pinetechs.orvix.ims.inventory.vehicle.dto.VehicleInventoryItemResponse;
 import com.pinetechs.orvix.ims.inventory.vehicle.entity.VehicleInventoryItem;
 import com.pinetechs.orvix.ims.inventory.vehicle.repository.VehicleInventoryItemRepository;
 import com.pinetechs.orvix.ims.inventory.vehicle.repository.VehicleInventoryLocationRepository;
@@ -60,8 +60,7 @@ public class VehicleInventoryImportServiceImpl implements VehicleInventoryImport
     @Override
     @Transactional
     public UploadExcelResponse uploadExcel(Long taskId, MultipartFile file, User currentUser) {
-        InventoryTask task = inventoryTaskRepository.findById(taskId)
-                .orElseThrow(() -> new BusinessException(HttpStatus.BAD_REQUEST, "Inventory task not found"));
+        InventoryTask task = inventoryTaskRepository.findById(taskId).orElseThrow(() -> new BusinessException(HttpStatus.BAD_REQUEST, "Inventory task not found"));
 
         Company company = task.getCompany();
 
@@ -69,8 +68,8 @@ public class VehicleInventoryImportServiceImpl implements VehicleInventoryImport
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Task is not a vehicle inventory task");
         }
 
-        if (task.getStatus() != InventoryTaskStatus.DRAFT) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "Excel can be imported only when task is DRAFT");
+        if (task.getStatus() != InventoryTaskStatus.CREATED && task.getStatus() != InventoryTaskStatus.IMPORT_FAILED && task.getStatus() != InventoryTaskStatus.IMPORT_COMPLETED) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Excel can be imported only when task is in CREATED or IMPORT_FAILED status");
         }
 
         accessPolicyService.assertCanImportExcel(
@@ -111,6 +110,7 @@ public class VehicleInventoryImportServiceImpl implements VehicleInventoryImport
             job = backgroundJobRepository.save(job);
 
             task.setStatus(InventoryTaskStatus.IMPORT_PENDING);
+            task.setImportJobId(job.getId());
             inventoryTaskRepository.save(task);
 
             UploadExcelResponse response = new UploadExcelResponse();

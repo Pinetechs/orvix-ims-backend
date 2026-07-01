@@ -9,11 +9,18 @@ import com.pinetechs.orvix.ims.company.repository.CompanyRepository;
 import com.pinetechs.orvix.ims.security.AccessPolicyService;
 import com.pinetechs.orvix.ims.user.entity.User;
 import com.pinetechs.orvix.ims.user.enums.PermissionCode;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.*;
 
 @Service
 @Transactional
@@ -49,9 +56,43 @@ public class CompanyService {
     }
 
     @Transactional(readOnly = true)
-    public Page<CompanyResponse> getAll(Pageable pageable, User currentUser) {
+    public Page<CompanyResponse> getAll(Pageable pageable, String search,User currentUser) {
         accessPolicyService.assertPermission(currentUser, PermissionCode.COMPANY_VIEW, "User does not have permission to view companies");
-        return companyRepository.findAll(pageable).map(CompanyResponse::from);
+
+        Specification<Company> companySpecification = getSpecification(search );
+
+        return companyRepository.findAll(companySpecification,pageable).map(CompanyResponse::from);
+    }
+
+    private Specification<Company> getSpecification(String search) {
+
+        return new Specification<Company>() {
+            @Override
+            public Predicate toPredicate(Root<Company> root, CriteriaQuery<?> query, CriteriaBuilder cb) {
+                List<Predicate> predicates = new ArrayList<>();
+
+                if (search != null && !search.isBlank()) {
+                    String like = "%" + search.trim().toUpperCase(Locale.ROOT) + "%";
+
+                    predicates.add(cb.or(
+                            cb.like(cb.upper(root.get("name")), like),
+                            cb.like(cb.upper(root.get("code")), like)
+                    ));
+                }
+
+                return cb.and(predicates.toArray(new Predicate[0]));
+
+              /*  if (currentUser.getCompanies() == null || currentUser.getCompanies().isEmpty()) {
+                    return cb.and(predicates.toArray(new Predicate[0]));
+                }
+
+                List<Long> companyIds = currentUser.getCompanies().stream().map(Company::getId).toList();
+
+                predicates.add(root.get("id").in(companyIds));
+
+                return cb.and(predicates.toArray(new Predicate[0]));*/
+            }
+        };
     }
 
     public void disable(Long id, User currentUser) {
@@ -77,5 +118,14 @@ public class CompanyService {
         if (value == null || value.trim().isEmpty()) throw new BusinessException(HttpStatus.BAD_REQUEST, field + " is required");
         return value.trim();
     }
+
+    private String normalizeSearch(String search) {
+        if (search == null || search.isBlank()) {
+            return null;
+        }
+
+        return search.trim();
+    }
+
     private String trimToNull(String value) { return value == null || value.trim().isEmpty() ? null : value.trim(); }
 }

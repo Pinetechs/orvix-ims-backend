@@ -69,8 +69,7 @@ public class VehicleImportJobProcessor implements BackgroundJobProcessor {
         result.setJobId(jobId);
         result.setTaskId(taskId);
 
-        log.info(
-                "Vehicle import job started. jobId={}, taskId={}, uploadedFileId={}, file={}",
+        log.info("Vehicle import job started. jobId={}, taskId={}, uploadedFileId={}, file={}",
                 jobId,
                 taskId,
                 job.getUploadedFileId(),
@@ -92,17 +91,7 @@ public class VehicleImportJobProcessor implements BackgroundJobProcessor {
             Set<String> storeNoSet = new LinkedHashSet<>();
             Set<String> locationNameSet = new LinkedHashSet<>();
 
-            readExcelFile(
-                    job,
-                    task,
-                    path,
-                    result,
-                    items,
-                    locationsMap,
-                    vinSet,
-                    storeNoSet,
-                    locationNameSet
-            );
+            readExcelFile(job, task, path, result, items, locationsMap, vinSet, storeNoSet, locationNameSet);
 
             if (!result.getErrors().isEmpty()) {
                 String firstErrors = result.getErrors()
@@ -123,11 +112,7 @@ public class VehicleImportJobProcessor implements BackgroundJobProcessor {
                     locationsMap.size()
             );
 
-            persistenceService.replaceVehicleInventoryData(
-                    taskId,
-                    items,
-                    locationsMap.values()
-            );
+            persistenceService.replaceVehicleInventoryData(taskId, items, locationsMap.values());
 
             result.setImportedRows(items.size());
             result.setImportedItems(items.size());
@@ -175,10 +160,7 @@ public class VehicleImportJobProcessor implements BackgroundJobProcessor {
         }
     }
 
-    private void readExcelFile(
-            BackgroundJob job,
-            InventoryTask task,
-            Path path,
+    private void readExcelFile(BackgroundJob job, InventoryTask task, Path path,
             VehicleInventoryImportResult result,
             List<VehicleInventoryItem> items,
             Map<String, VehicleInventoryLocation> locationsMap,
@@ -272,22 +254,23 @@ public class VehicleImportJobProcessor implements BackgroundJobProcessor {
                 }
 
                 VehicleInventoryItem item = new VehicleInventoryItem();
+
                 item.setInventoryTask(task);
-                item.setPartNo(getString(row, columns.get("PART_NO")));
-                item.setMake(getString(row, columns.get("MAKE")));
-                item.setModelName(getString(row, columns.get("MODEL_NAME")));
-                item.setModelYear(getInteger(row, columns.get("YEAR")));
+                item.setPartNo(getString(row, columns.get(normalizeColumnName("PART_NO"))));
+                item.setMake(getString(row, columns.get(normalizeColumnName("MAKE"))));
+                item.setModelName(getString(row, columns.get(normalizeColumnName("MODEL_NAME"))));
+                item.setModelYear(getString(row, columns.get(normalizeColumnName("YEAR"))));
                 item.setVinNo(vinNo);
-                item.setSpecification(getString(row, columns.get("SPECIFICATION")));
-                item.setQuantity(getInteger(row, columns.get("QTY")));
-                item.setReceiptDate(getDate(row, columns.get("RECEIPT_DATE")));
-                item.setColorNo(getString(row, columns.get("COLOR_NO")));
-                item.setInteriorColor(getString(row, columns.get("INTERIOR_COLOR")));
-                item.setMchStatus(getString(row, columns.get("MCH_STATUS")));
-                item.setStockStatus(getString(row, columns.get("STOCK_STATUS")));
+                item.setSpecification(getString(row, columns.get(normalizeColumnName("SPECIFICATION"))));
+                item.setQuantity(getInteger(row, columns.get(normalizeColumnName("QTY"))));
+                item.setReceiptDate(getDate(row, columns.get(normalizeColumnName("RECEIPT_DATE"))));
+                item.setColorNo(getString(row, columns.get(normalizeColumnName("COLOR_NO"))));
+                item.setInteriorColor(getString(row, columns.get(normalizeColumnName("INTERIOR_COLOR"))));
+                item.setMchStatus(getString(row, columns.get(normalizeColumnName("MCH_STATUS"))));
+                item.setStockStatus(getString(row, columns.get(normalizeColumnName("STOCK_STATUS"))));
                 item.setLocation(locationName);
                 item.setStoreNo(storeNo);
-                item.setDarArtId(getString(row, columns.get("DAR_ART_ID")));
+                item.setDarArtId(getString(row, columns.get(normalizeColumnName("DAR_ART_ID"))));
 
                 items.add(item);
 
@@ -342,6 +325,23 @@ public class VehicleImportJobProcessor implements BackgroundJobProcessor {
             throw new RuntimeException("Related file path is not a file: " + path);
         }
     }
+
+
+    private String normalizeColumnName(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        return value
+                .trim()
+                .toUpperCase(Locale.ROOT)
+                .replace(" ", "_")
+                .replace("-", "_");
+    }
+
+
+
+
 
     private void updateJob(BackgroundJob job, int progress, String message) {
         job.setProgress(progress);

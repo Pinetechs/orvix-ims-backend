@@ -1,4 +1,6 @@
-package com.pinetechs.orvix.ims.inventory.vehicle.controller;
+package com.pinetechs.orvix.ims.inventory.vehicle.dto;
+
+import com.pinetechs.orvix.ims.inventory.vehicle.entity.VehicleInventoryItem;
 
 import java.time.LocalDate;
 
@@ -8,7 +10,7 @@ public class VehicleInventoryItemResponse {
     private String partNo;
     private String make;
     private String modelName;
-    private Integer modelYear;
+    private String modelYear;
     private String vinNo;
     private String specification;
     private Integer quantity;
@@ -20,6 +22,28 @@ public class VehicleInventoryItemResponse {
     private String location;
     private String storeNo;
     private String darArtId;
+
+
+    public static VehicleInventoryItemResponse from(VehicleInventoryItem item) {
+        VehicleInventoryItemResponse response = new VehicleInventoryItemResponse();
+        response.setId(item.getId());
+        response.setPartNo(item.getPartNo());
+        response.setMake(item.getMake());
+        response.setModelName(item.getModelName());
+        response.setModelYear(item.getModelYear());
+        response.setVinNo(item.getVinNo());
+        response.setSpecification(item.getSpecification());
+        response.setQuantity(item.getQuantity());
+        response.setReceiptDate(item.getReceiptDate());
+        response.setColorNo(item.getColorNo());
+        response.setInteriorColor(item.getInteriorColor());
+        response.setMchStatus(item.getMchStatus());
+        response.setStockStatus(item.getStockStatus());
+        response.setLocation(item.getLocation());
+        response.setStoreNo(item.getStoreNo());
+        response.setDarArtId(item.getDarArtId());
+        return response;
+    }
 
     public Long getId() {
         return id;
@@ -53,11 +77,11 @@ public class VehicleInventoryItemResponse {
         this.modelName = modelName;
     }
 
-    public Integer getModelYear() {
+    public String getModelYear() {
         return modelYear;
     }
 
-    public void setModelYear(Integer modelYear) {
+    public void setModelYear(String modelYear) {
         this.modelYear = modelYear;
     }
 

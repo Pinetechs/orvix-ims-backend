@@ -41,11 +41,11 @@ public class CompanyController {
     @GetMapping
     public Page<CompanyResponse> getAll(@RequestParam(name = "page", defaultValue = "0") int page, @RequestParam(name = "size", defaultValue = "20") int size,
                                         @RequestParam(name = "sortBy", defaultValue = "id") String sortBy,
-                                        @RequestParam(name = "sortOrder", defaultValue = "desc") String sortOrder,
+                                        @RequestParam(name = "sortOrder", defaultValue = "desc") String sortOrder, @RequestParam (name="search",required = false)String search ,
                                         Authentication authentication) {
         Sort sort = "asc".equalsIgnoreCase(sortOrder) ? Sort.by(sortBy).ascending() : Sort.by(sortBy).descending();
         Pageable pageable = PageRequest.of(page, size, sort);
-        return companyService.getAll(pageable, helper.currentUser(authentication));
+        return companyService.getAll(pageable,search ,helper.currentUser(authentication));
     }
 
     @PutMapping("/{id}/disable")

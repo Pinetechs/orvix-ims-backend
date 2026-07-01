@@ -49,7 +49,7 @@ public class VehicleInventoryItem {
     private String modelName;
 
     @Column(name = "model_year")
-    private Integer modelYear;
+    private String modelYear;
 
     @Column(name = "vin_no", nullable = false, length = 100)
     private String vinNo;
@@ -113,6 +113,15 @@ public class VehicleInventoryItem {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+
+    public String getModelYear() {
+        return modelYear;
+    }
+
+    public void setModelYear(String modelYear) {
+        this.modelYear = modelYear;
+    }
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -127,9 +136,6 @@ public class VehicleInventoryItem {
 
     public String getModelName() { return modelName; }
     public void setModelName(String modelName) { this.modelName = modelName; }
-
-    public Integer getModelYear() { return modelYear; }
-    public void setModelYear(Integer modelYear) { this.modelYear = modelYear; }
 
     public String getVinNo() { return vinNo; }
     public void setVinNo(String vinNo) { this.vinNo = vinNo; }

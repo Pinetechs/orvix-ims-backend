@@ -1,13 +1,19 @@
 package com.pinetechs.orvix.ims.security;
 
 import com.pinetechs.orvix.ims.common.exception.BusinessException;
+import com.pinetechs.orvix.ims.company.entity.Company;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
+import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.user.entity.User;
 import com.pinetechs.orvix.ims.user.enums.PermissionCode;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 @Service
 public class AccessPolicyService {
@@ -56,6 +62,122 @@ public class AccessPolicyService {
 
 
 
+    public Set<InventoryDomain> getAccessibleDomainForInventoryTaskView(User user , InventoryDomain domain) {
+
+
+        if (user == null){
+            throw new BusinessException(HttpStatus.UNAUTHORIZED,"Authentication required");
+        }
+
+
+
+
+        if ( !isAllowToViewTask(user)){
+
+            throw new BusinessException(HttpStatus.UNAUTHORIZED , "");
+        };
+
+        return user.getInventoryDomains();
+
+    }
+
+    private boolean isAllowToViewTask(User user) {
+
+
+        for (PermissionCode permissionCode: user.getPermissions()) {
+
+            if (permissionCode == PermissionCode.ASSET_TASK_VIEW || permissionCode == PermissionCode.VEHICLE_TASK_VIEW || permissionCode == PermissionCode.SPARE_PART_TASK_VIEW){
+                return true;
+            }
+
+        }
+
+        return false ;
+    }
+
+
+    public Set<Company> getAccessibleCompaniesForInventoryTaskView(User user , Company company) {
+        if (user == null){
+            throw new BusinessException(HttpStatus.UNAUTHORIZED,"Authentication required");
+        }
+
+        if (user.getCompanies().isEmpty()) {
+
+            if (company == null) {
+                return new HashSet<>();
+            }
+
+            return new HashSet<>(Set.of(company));
+        }
+
+        for (Company userCompany: user.getCompanies()) {
+
+            if (userCompany.getId().equals(company.getId())){
+                return new HashSet<>(Set.of(company));
+            }
+
+        }
+
+
+        throw new BusinessException(HttpStatus.FORBIDDEN, "User is not allowed to view this task for this company");
+
+
+    }
+
+
+
+    public Set<Company> assertCanViewInventoryTask(User user, InventoryTask task) {
+        if (user == null){
+            throw new BusinessException(HttpStatus.UNAUTHORIZED,"Authentication required");
+        }
+
+        PermissionCode permissionCode = taskViewPermission(task.getInventoryDomain());
+        for (PermissionCode permission : user.getPermissions()) {
+
+            if (permission == permissionCode) {
+
+                if (user.getCompanies().isEmpty()) {
+                    return new HashSet<>();
+                }
+
+
+
+                return new HashSet<>(user.getCompanies());
+            }
+
+        }
+
+        throw new BusinessException(HttpStatus.BAD_REQUEST, "User is not allowed to view this task for this company");
+
+    }
+
+
+
+
+    public Set<Company> assertCanViewInventoryTask(User user, InventoryDomain domain) {
+        if (user == null){
+            throw new BusinessException(HttpStatus.UNAUTHORIZED,"Authentication required");
+        }
+        PermissionCode permissionCode = taskViewPermission(domain);
+        for (PermissionCode permission : user.getPermissions()) {
+
+            if (permission == permissionCode) {
+
+                if (user.getCompanies().isEmpty()) {
+                    return new HashSet<>();
+                }
+
+
+
+                return new HashSet<>(user.getCompanies());
+            }
+
+        }
+
+        throw new BusinessException(HttpStatus.BAD_REQUEST, "User is not allowed to view this task for this company");
+
+    }
+
 
     public void assertCanViewInventoryTask(User user, Long companyId, InventoryDomain domain) {
         if (user == null){
@@ -70,6 +192,7 @@ public class AccessPolicyService {
                 if (user.getCompanies().isEmpty()) {
                     return;
                 }
+
 
                 if (user.hasCompany(companyId)) {
                     return;

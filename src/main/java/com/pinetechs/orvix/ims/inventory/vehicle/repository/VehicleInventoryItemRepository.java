@@ -67,5 +67,9 @@ public interface VehicleInventoryItemRepository
 
     Page<VehicleInventoryItem> findByInventoryTaskIdOrderByIdAsc(Long taskId, Pageable pageable);
 
+    Page<VehicleInventoryItem> findByInventoryTask_Id(Long id, Pageable pageable);
+
+
+
 
 }

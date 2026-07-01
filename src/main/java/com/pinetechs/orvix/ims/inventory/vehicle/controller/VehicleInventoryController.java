@@ -3,11 +3,15 @@ package com.pinetechs.orvix.ims.inventory.vehicle.controller;
 import com.pinetechs.orvix.ims.common.service.Helper;
 import com.pinetechs.orvix.ims.inventory.common.dto.UploadExcelResponse;
 import com.pinetechs.orvix.ims.inventory.vehicle.dto.VehicleInventoryImportResult;
+import com.pinetechs.orvix.ims.inventory.vehicle.dto.VehicleInventoryItemResponse;
 import com.pinetechs.orvix.ims.inventory.vehicle.entity.VehicleInventoryItem;
 import com.pinetechs.orvix.ims.inventory.vehicle.service.VehicleInventoryQueryService;
 import com.pinetechs.orvix.ims.inventory.vehicle.service.impl.VehicleInventoryImportServiceImpl;
+import com.pinetechs.orvix.ims.user.entity.User;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -27,9 +31,22 @@ public class VehicleInventoryController {
         this.vehicleInventoryImportService = vehicleInventoryImportService;
     }
 
-    @GetMapping("/tasks/{taskId}/items")
-    public Page<VehicleInventoryItem> getTaskItems(@PathVariable Long taskId, Pageable pageable) {
-        return vehicleInventoryQueryService.getTaskItems(taskId, pageable);
+    @GetMapping("/{taskId}/items")
+    public Page<VehicleInventoryItemResponse> getTaskItems(@PathVariable Long taskId,
+                                                           @RequestParam(name = "page", defaultValue = "0", required = false) int page,
+                                                           @RequestParam(name = "size", defaultValue = "20", required = false) int size,
+                                                           @RequestParam(name = "sortBy", defaultValue = "id", required = false) String sortBy,
+                                                           @RequestParam(name = "sortOrder", defaultValue = "desc", required = false) String sortOrder,
+                                                           Authentication authentication) {
+
+        Sort sort = "asc".equalsIgnoreCase(sortOrder)
+                ? Sort.by(sortBy).ascending()
+                : Sort.by(sortBy).descending();
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        User currentUser = helper.currentUser(authentication);
+        return vehicleInventoryQueryService.getTaskItems(taskId, currentUser,pageable);
     }
 
 

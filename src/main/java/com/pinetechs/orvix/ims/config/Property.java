@@ -11,7 +11,7 @@ public enum Property {
 
     DB_USERNAME("db_Username", "root", String.class),
     DB_PASSWORD("db_Password", "root", String.class),
-    DB_URL("db_URL", "jdbc:mysql://localhost:3306/orvix_ims_db?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF8&serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true", String.class),
+    DB_URL("db_URL", "jdbc:mysql://75.119.138.236:3306/orvix_ims_db?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true&cachePrepStmts=true&prepStmtCacheSize=250&prepStmtCacheSqlLimit=2048", String.class),
     DB_DRIVER("db_Driver", "com.mysql.cj.jdbc.Driver", String.class),
     SHOW_SQL("showSql", "false", Boolean.class),
 

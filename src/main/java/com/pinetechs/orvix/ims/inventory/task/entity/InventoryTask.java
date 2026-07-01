@@ -86,8 +86,7 @@ public class InventoryTask {
 
     @Column(name = "notes", length = 1000)
     private String notes;
-
-
+    private Long importJobId;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -221,6 +220,14 @@ public class InventoryTask {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Long getImportJobId() {
+        return importJobId;
+    }
+
+    public void setImportJobId(Long importJobId) {
+        this.importJobId = importJobId;
     }
 
     public String getNotes() { return notes; }

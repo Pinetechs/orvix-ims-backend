@@ -61,11 +61,7 @@ public class BackgroundJobWorker {
             LocalDateTime now = LocalDateTime.now();
             Pageable pageable = PageRequest.of(0, batchSize);
 
-            List<Long> ids = backgroundJobRepository.findCandidateIds(
-                    JobStatus.PENDING,
-                    now,
-                    pageable
-            );
+            List<Long> ids = backgroundJobRepository.findCandidateIds(JobStatus.PENDING, now, pageable);
 
             if (ids.isEmpty()) {
                 log.debug("No pending background jobs found.");
@@ -82,10 +78,7 @@ public class BackgroundJobWorker {
                 return;
             }
 
-            List<BackgroundJob> jobs = backgroundJobRepository.findByIdInAndStatus(
-                    ids,
-                    JobStatus.RUNNING
-            );
+            List<BackgroundJob> jobs = backgroundJobRepository.findByIdInAndStatus(ids, JobStatus.RUNNING);
 
             for (BackgroundJob job : jobs) {
                 Long jobId = job.getId();

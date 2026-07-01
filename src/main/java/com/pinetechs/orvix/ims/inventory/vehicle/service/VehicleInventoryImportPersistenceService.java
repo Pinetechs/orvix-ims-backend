@@ -5,9 +5,11 @@ import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskRepository;
 import com.pinetechs.orvix.ims.inventory.vehicle.entity.VehicleInventoryItem;
 import com.pinetechs.orvix.ims.inventory.vehicle.entity.VehicleInventoryLocation;
+import com.pinetechs.orvix.ims.inventory.vehicle.repository.VehicleInventoryItemJdbcRepository;
 import com.pinetechs.orvix.ims.inventory.vehicle.repository.VehicleInventoryItemRepository;
 import com.pinetechs.orvix.ims.inventory.vehicle.repository.VehicleInventoryLocationRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
@@ -19,15 +21,15 @@ public class VehicleInventoryImportPersistenceService {
     private final InventoryTaskRepository inventoryTaskRepository;
     private final VehicleInventoryItemRepository itemRepository;
     private final VehicleInventoryLocationRepository locationRepository;
+    private final VehicleInventoryItemJdbcRepository itemJdbcRepository ;
 
-    public VehicleInventoryImportPersistenceService(
-            InventoryTaskRepository inventoryTaskRepository,
-            VehicleInventoryItemRepository itemRepository,
-            VehicleInventoryLocationRepository locationRepository
-    ) {
+    public VehicleInventoryImportPersistenceService(InventoryTaskRepository inventoryTaskRepository,
+                                                    VehicleInventoryItemRepository itemRepository,
+                                                    VehicleInventoryLocationRepository locationRepository, VehicleInventoryItemJdbcRepository itemJdbcRepository) {
         this.inventoryTaskRepository = inventoryTaskRepository;
         this.itemRepository = itemRepository;
         this.locationRepository = locationRepository;
+        this.itemJdbcRepository = itemJdbcRepository;
     }
 
     @Transactional
@@ -52,14 +54,9 @@ public class VehicleInventoryImportPersistenceService {
         });
     }
 
-    @Transactional
-    public void replaceVehicleInventoryData(
-            Long taskId,
-            List<VehicleInventoryItem> items,
-            Collection<VehicleInventoryLocation> locations
-    ) {
-        InventoryTask task = inventoryTaskRepository.findById(taskId)
-                .orElseThrow(() -> new RuntimeException("Inventory task not found. taskId=" + taskId));
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public void replaceVehicleInventoryData(Long taskId, List<VehicleInventoryItem> items, Collection<VehicleInventoryLocation> locations) {
+        InventoryTask task = inventoryTaskRepository.findByIdForUpdate(taskId).orElseThrow(() -> new RuntimeException("Inventory task not found. taskId=" + taskId));
 
         for (VehicleInventoryItem item : items) {
             item.setInventoryTask(task);
@@ -72,15 +69,14 @@ public class VehicleInventoryImportPersistenceService {
         itemRepository.deleteByTaskId(taskId);
         locationRepository.deleteByTaskId(taskId);
 
-        itemRepository.saveAll(items);
+        itemJdbcRepository.batchInsert(taskId,items);
         locationRepository.saveAll(locations);
 
         task.setTotalRecords(items.size());
         task.setProcessedRecords(0);
         task.setMatchedRecords(0);
 
-        // حسب المطلوب: بعد انتهاء معالجة البيانات ترجع إلى DRAFT
-        task.setStatus(InventoryTaskStatus.DRAFT);
+        task.setStatus(InventoryTaskStatus.IMPORT_COMPLETED);
 
         inventoryTaskRepository.save(task);
     }
