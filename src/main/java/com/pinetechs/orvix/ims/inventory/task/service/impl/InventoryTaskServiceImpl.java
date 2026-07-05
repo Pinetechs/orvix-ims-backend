@@ -5,14 +5,24 @@ import com.pinetechs.orvix.ims.company.entity.Company;
 import com.pinetechs.orvix.ims.company.repository.CompanyRepository;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryTaskStatus;
+import com.pinetechs.orvix.ims.inventory.task.dto.AssignInventoryTaskStaffRequest;
 import com.pinetechs.orvix.ims.inventory.task.dto.CreateInventoryTaskRequest;
+import com.pinetechs.orvix.ims.inventory.task.dto.InventoryTaskAssignmentResponse;
+import com.pinetechs.orvix.ims.inventory.task.dto.StaffLocationAssignmentRequest;
 import com.pinetechs.orvix.ims.inventory.task.dto.TaskResponse;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
+import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTaskAssignment;
+import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskAssignmentRepository;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskRepository;
+import com.pinetechs.orvix.ims.inventory.vehicle.entity.VehicleInventoryLocation;
+import com.pinetechs.orvix.ims.inventory.vehicle.entity.VehicleInventoryLocationAssignment;
+import com.pinetechs.orvix.ims.inventory.vehicle.repository.VehicleInventoryLocationAssignmentRepository;
+import com.pinetechs.orvix.ims.inventory.vehicle.repository.VehicleInventoryLocationRepository;
 import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskService;
 import com.pinetechs.orvix.ims.security.AccessPolicyService;
 import com.pinetechs.orvix.ims.user.entity.User;
 import com.pinetechs.orvix.ims.user.enums.PermissionCode;
+import com.pinetechs.orvix.ims.user.enums.UserType;
 import com.pinetechs.orvix.ims.user.repository.UserRepository;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
@@ -36,18 +46,27 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
     private final InventoryTaskRepository inventoryTaskRepository;
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
-    private final AccessPolicyService accessPolicyService ;
+    private final AccessPolicyService accessPolicyService;
+    private final InventoryTaskAssignmentRepository assignmentRepository;
+    private final VehicleInventoryLocationRepository vehicleLocationRepository;
+    private final VehicleInventoryLocationAssignmentRepository locationAssignmentRepository;
 
 
     public InventoryTaskServiceImpl(
             InventoryTaskRepository inventoryTaskRepository,
             CompanyRepository companyRepository,
             UserRepository userRepository,
-            AccessPolicyService accessPolicyService) {
+            AccessPolicyService accessPolicyService,
+            InventoryTaskAssignmentRepository assignmentRepository,
+            VehicleInventoryLocationRepository vehicleLocationRepository,
+            VehicleInventoryLocationAssignmentRepository locationAssignmentRepository) {
         this.inventoryTaskRepository = inventoryTaskRepository;
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
         this.accessPolicyService = accessPolicyService;
+        this.assignmentRepository = assignmentRepository;
+        this.vehicleLocationRepository = vehicleLocationRepository;
+        this.locationAssignmentRepository = locationAssignmentRepository;
     }
 
     @Override
@@ -74,10 +93,20 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
     public InventoryTask startTask(Long taskId) {
         InventoryTask task = getTask(taskId);
 
-        if (task.getStatus() != InventoryTaskStatus.READY_FOR_ASSIGNMENT
-                && task.getStatus() != InventoryTaskStatus.PAUSED) {
-            throw new RuntimeException("Task cannot be started from status: " + task.getStatus());
+        if (task.getStatus() == InventoryTaskStatus.PAUSED) {
+            task.setStatus(InventoryTaskStatus.IN_PROGRESS);
+            task.setPausedAt(null);
+            task.setPauseReason(null);
+            return inventoryTaskRepository.save(task);
         }
+
+        if (task.getStatus() != InventoryTaskStatus.IMPORT_COMPLETED
+                && task.getStatus() != InventoryTaskStatus.READY_FOR_ASSIGNMENT
+                && task.getStatus() != InventoryTaskStatus.READY_TO_START) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Task cannot be started from status: " + task.getStatus());
+        }
+
+        validateTaskReadyToStart(task);
 
         task.setStatus(InventoryTaskStatus.IN_PROGRESS);
 
@@ -90,6 +119,36 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
 
         return inventoryTaskRepository.save(task);
     }
+
+    @Override
+    public InventoryTask markReadyToStart(Long taskId, User currentUser) {
+        InventoryTask task = getTask(taskId);
+
+        accessPolicyService.assertCanAssignInventoryTaskUsers(
+                currentUser,
+                task.getCompany().getId(),
+                task.getInventoryDomain()
+        );
+
+        if (task.getStatus() == InventoryTaskStatus.READY_TO_START) {
+            return task;
+        }
+
+        if (task.getStatus() != InventoryTaskStatus.IMPORT_COMPLETED
+                && task.getStatus() != InventoryTaskStatus.READY_FOR_ASSIGNMENT
+                && task.getStatus() != InventoryTaskStatus.DRAFT) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Task cannot be marked ready from status: " + task.getStatus());
+        }
+
+        validateTaskReadyToStart(task);
+
+        task.setStatus(InventoryTaskStatus.READY_TO_START);
+        return inventoryTaskRepository.save(task);
+    }
+
+
+
+
 
     @Override
     public InventoryTask pauseTask(Long taskId, String pauseReason) {
@@ -365,6 +424,33 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
         };
     }
 
+
+
+
+    private void validateTaskReadyToStart(InventoryTask task) {
+        long assignmentCount = assignmentRepository.countByInventoryTaskId(task.getId());
+
+        if (assignmentCount == 0) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Assign at least one inventory staff member before starting the task");
+        }
+
+        if (task.getInventoryDomain() == InventoryDomain.VEHICLE) {
+            long locationCount = vehicleLocationRepository.countByInventoryTaskId(task.getId());
+
+            if (locationCount == 0) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "Vehicle task has no imported locations. Import the vehicle Excel file first");
+            }
+
+            long assignedLocationCount = locationAssignmentRepository.countDistinctActiveLocationsByTaskId(task.getId());
+
+            if (assignedLocationCount < locationCount) {
+                throw new BusinessException(
+                        HttpStatus.BAD_REQUEST,
+                        "All vehicle locations must be assigned before the task can be ready to start"
+                );
+            }
+        }
+    }
 
     private InventoryTask getTask(Long taskId) {
         return inventoryTaskRepository.findById(taskId)

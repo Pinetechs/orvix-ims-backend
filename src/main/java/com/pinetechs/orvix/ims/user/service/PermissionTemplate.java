@@ -76,6 +76,9 @@ public final class PermissionTemplate {
         if (userType == UserType.PINETECHS_SUPPORT_STAFF) {
             return new HashSet<>(EnumSet.allOf(InventoryDomain.class));
         }
+        if (userType == UserType.INVENTORY_STAFF){
+            return new HashSet<>(EnumSet.allOf(InventoryDomain.class));
+        }
 
 
         return requested == null ? new HashSet<>() : new HashSet<>(requested);

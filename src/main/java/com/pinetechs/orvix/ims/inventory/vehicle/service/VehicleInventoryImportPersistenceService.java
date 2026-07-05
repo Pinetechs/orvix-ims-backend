@@ -3,11 +3,13 @@ package com.pinetechs.orvix.ims.inventory.vehicle.service;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryTaskStatus;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskRepository;
+import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskAssignmentRepository;
 import com.pinetechs.orvix.ims.inventory.vehicle.entity.VehicleInventoryItem;
 import com.pinetechs.orvix.ims.inventory.vehicle.entity.VehicleInventoryLocation;
 import com.pinetechs.orvix.ims.inventory.vehicle.repository.VehicleInventoryItemJdbcRepository;
 import com.pinetechs.orvix.ims.inventory.vehicle.repository.VehicleInventoryItemRepository;
 import com.pinetechs.orvix.ims.inventory.vehicle.repository.VehicleInventoryLocationRepository;
+import com.pinetechs.orvix.ims.inventory.vehicle.repository.VehicleInventoryLocationAssignmentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,15 +23,22 @@ public class VehicleInventoryImportPersistenceService {
     private final InventoryTaskRepository inventoryTaskRepository;
     private final VehicleInventoryItemRepository itemRepository;
     private final VehicleInventoryLocationRepository locationRepository;
-    private final VehicleInventoryItemJdbcRepository itemJdbcRepository ;
+    private final VehicleInventoryItemJdbcRepository itemJdbcRepository;
+    private final InventoryTaskAssignmentRepository assignmentRepository;
+    private final VehicleInventoryLocationAssignmentRepository locationAssignmentRepository;
 
     public VehicleInventoryImportPersistenceService(InventoryTaskRepository inventoryTaskRepository,
                                                     VehicleInventoryItemRepository itemRepository,
-                                                    VehicleInventoryLocationRepository locationRepository, VehicleInventoryItemJdbcRepository itemJdbcRepository) {
+                                                    VehicleInventoryLocationRepository locationRepository,
+                                                    VehicleInventoryItemJdbcRepository itemJdbcRepository,
+                                                    InventoryTaskAssignmentRepository assignmentRepository,
+                                                    VehicleInventoryLocationAssignmentRepository locationAssignmentRepository) {
         this.inventoryTaskRepository = inventoryTaskRepository;
         this.itemRepository = itemRepository;
         this.locationRepository = locationRepository;
         this.itemJdbcRepository = itemJdbcRepository;
+        this.assignmentRepository = assignmentRepository;
+        this.locationAssignmentRepository = locationAssignmentRepository;
     }
 
     @Transactional
@@ -66,6 +75,8 @@ public class VehicleInventoryImportPersistenceService {
             location.setInventoryTask(task);
         }
 
+        locationAssignmentRepository.deleteByTaskId(taskId);
+        assignmentRepository.deleteByInventoryTaskId(taskId);
         itemRepository.deleteByTaskId(taskId);
         locationRepository.deleteByTaskId(taskId);
 

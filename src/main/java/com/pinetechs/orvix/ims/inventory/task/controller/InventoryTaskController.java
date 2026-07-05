@@ -3,10 +3,13 @@ package com.pinetechs.orvix.ims.inventory.task.controller;
 import com.pinetechs.orvix.ims.common.service.Helper;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryTaskStatus;
+import com.pinetechs.orvix.ims.inventory.task.dto.AssignInventoryTaskStaffRequest;
 import com.pinetechs.orvix.ims.inventory.task.dto.CreateInventoryTaskRequest;
+import com.pinetechs.orvix.ims.inventory.task.dto.InventoryTaskAssignmentResponse;
 import com.pinetechs.orvix.ims.inventory.task.dto.TaskResponse;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskService;
+import com.pinetechs.orvix.ims.inventory.task.service.impl.InventoryTaskServiceImpl;
 import com.pinetechs.orvix.ims.inventory.vehicle.dto.VehicleInventoryImportResult;
 import com.pinetechs.orvix.ims.inventory.vehicle.service.VehicleInventoryImportService;
 import com.pinetechs.orvix.ims.user.entity.User;
@@ -20,21 +23,21 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/inventory/tasks")
 public class InventoryTaskController {
 
-    private final InventoryTaskService inventoryTaskService;
+    private final InventoryTaskServiceImpl inventoryTaskService;
     private final VehicleInventoryImportService vehicleInventoryImportService;
     private final Helper helper ;
 
-    public InventoryTaskController(InventoryTaskService inventoryTaskService, VehicleInventoryImportService vehicleInventoryImportService, Helper helper) {
+    public InventoryTaskController(InventoryTaskServiceImpl inventoryTaskService, VehicleInventoryImportService vehicleInventoryImportService, Helper helper) {
         this.inventoryTaskService = inventoryTaskService;
         this.vehicleInventoryImportService = vehicleInventoryImportService;
         this.helper = helper;
     }
-
-
 
     @PostMapping
     public InventoryTask createTask(
@@ -82,6 +85,15 @@ public class InventoryTaskController {
     }
 
 
+
+
+
+
+
+    @PostMapping("/{taskId}/ready-to-start")
+    public InventoryTask markReadyToStart(@PathVariable Long taskId, Authentication authentication) {
+        return inventoryTaskService.markReadyToStart(taskId, helper.currentUser(authentication));
+    }
 
 
         @PostMapping("/{taskId}/start")

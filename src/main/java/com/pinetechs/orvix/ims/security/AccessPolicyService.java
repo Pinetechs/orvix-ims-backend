@@ -236,6 +236,31 @@ public class AccessPolicyService {
     }
 
 
+    public void assertCanAssignInventoryTaskUsers(User user, Long companyId, InventoryDomain domain) {
+        if (user == null) {
+            throw new BusinessException(HttpStatus.UNAUTHORIZED, "Authentication required");
+        }
+
+        PermissionCode permissionCode = taskAssignPermission(domain);
+
+        for (PermissionCode permission : user.getPermissions()) {
+            if (permission == permissionCode) {
+                if (user.getCompanies().isEmpty()) {
+                    return;
+                }
+
+                if (user.hasCompany(companyId)) {
+                    return;
+                }
+
+                throw new BusinessException(HttpStatus.FORBIDDEN, "User is not allowed to assign users for this company");
+            }
+        }
+
+        throw new BusinessException(HttpStatus.FORBIDDEN, "User is not allowed to assign users for this task");
+    }
+
+
     public void assertCanCreateTask(User user, Long companyId, InventoryDomain domain) {
 
 
@@ -322,6 +347,12 @@ public class AccessPolicyService {
         if (domain == InventoryDomain.VEHICLE) return PermissionCode.VEHICLE_TASK_UPDATE;
         if (domain == InventoryDomain.ASSET) return PermissionCode.ASSET_TASK_UPDATE;
         return PermissionCode.SPARE_PART_TASK_UPDATE;
+    }
+
+    private PermissionCode taskAssignPermission(InventoryDomain domain) {
+        if (domain == InventoryDomain.VEHICLE) return PermissionCode.VEHICLE_TASK_ASSIGN_USERS;
+        if (domain == InventoryDomain.ASSET) return PermissionCode.ASSET_TASK_ASSIGN_USERS;
+        return PermissionCode.SPARE_PART_TASK_ASSIGN_USERS;
     }
 
     private PermissionCode reportPermission(InventoryDomain domain) {

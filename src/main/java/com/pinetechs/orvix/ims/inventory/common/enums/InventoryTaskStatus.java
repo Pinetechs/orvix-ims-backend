@@ -9,6 +9,7 @@ public enum InventoryTaskStatus {
     IMPORT_FAILED,
     IMPORT_COMPLETED,
     READY_FOR_ASSIGNMENT,
+    READY_TO_START,
     DRAFT,
     IN_PROGRESS,
     PAUSED,

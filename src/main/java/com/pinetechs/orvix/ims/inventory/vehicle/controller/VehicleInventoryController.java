@@ -2,8 +2,11 @@ package com.pinetechs.orvix.ims.inventory.vehicle.controller;
 
 import com.pinetechs.orvix.ims.common.service.Helper;
 import com.pinetechs.orvix.ims.inventory.common.dto.UploadExcelResponse;
+import com.pinetechs.orvix.ims.inventory.task.dto.AssignInventoryTaskStaffRequest;
+import com.pinetechs.orvix.ims.inventory.task.dto.InventoryTaskAssignmentResponse;
 import com.pinetechs.orvix.ims.inventory.vehicle.dto.VehicleInventoryImportResult;
 import com.pinetechs.orvix.ims.inventory.vehicle.dto.VehicleInventoryItemResponse;
+import com.pinetechs.orvix.ims.inventory.vehicle.dto.VehicleInventoryLocationResponse;
 import com.pinetechs.orvix.ims.inventory.vehicle.entity.VehicleInventoryItem;
 import com.pinetechs.orvix.ims.inventory.vehicle.service.VehicleInventoryQueryService;
 import com.pinetechs.orvix.ims.inventory.vehicle.service.impl.VehicleInventoryImportServiceImpl;
@@ -15,6 +18,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/inventory/vehicle")
@@ -47,6 +52,28 @@ public class VehicleInventoryController {
 
         User currentUser = helper.currentUser(authentication);
         return vehicleInventoryQueryService.getTaskItems(taskId, currentUser,pageable);
+    }
+
+
+
+    @GetMapping("/{taskId}/assignments")
+    public List<InventoryTaskAssignmentResponse> getAssignments(@PathVariable Long taskId, Authentication authentication) {
+        return vehicleInventoryQueryService.getAssignments(taskId, helper.currentUser(authentication));
+    }
+
+
+    @PostMapping("/{taskId}/assignments")
+    public List<InventoryTaskAssignmentResponse> assignStaff(@PathVariable Long taskId, @RequestBody AssignInventoryTaskStaffRequest request, Authentication authentication) {
+        return vehicleInventoryQueryService.assignStaff(taskId, request, helper.currentUser(authentication));
+    }
+
+    @GetMapping("/{taskId}/locations")
+    public List<VehicleInventoryLocationResponse> getTaskLocations(
+            @PathVariable Long taskId,
+            Authentication authentication
+    ) {
+        User currentUser = helper.currentUser(authentication);
+        return vehicleInventoryQueryService.getTaskLocations(taskId, currentUser);
     }
 
 
