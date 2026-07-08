@@ -1,6 +1,6 @@
 package com.pinetechs.orvix.ims.inventory.vehicle.service;
 
-import com.pinetechs.orvix.ims.inventory.task.dto.AssignInventoryTaskStaffRequest;
+import com.pinetechs.orvix.ims.inventory.task.dto.AssignInventoryTaskStaffLocationRequest;
 import com.pinetechs.orvix.ims.inventory.task.dto.InventoryTaskAssignmentResponse;
 import com.pinetechs.orvix.ims.inventory.vehicle.dto.VehicleInventoryItemResponse;
 import com.pinetechs.orvix.ims.inventory.vehicle.dto.VehicleInventoryLocationResponse;
@@ -21,7 +21,7 @@ public interface VehicleInventoryQueryService {
     List<VehicleInventoryLocationResponse> getTaskLocations(Long taskId, User currentUser);
     List<InventoryTaskAssignmentResponse> getAssignments(Long taskId, User currentUser);
 
-     List<InventoryTaskAssignmentResponse> assignStaff(Long taskId, AssignInventoryTaskStaffRequest request, User currentUser) ;
+     List<InventoryTaskAssignmentResponse> assignStaff(Long taskId, AssignInventoryTaskStaffLocationRequest request, User currentUser) ;
 
 
 

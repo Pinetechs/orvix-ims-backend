@@ -3,7 +3,7 @@ package com.pinetechs.orvix.ims.inventory.vehicle.service.impl;
 import com.pinetechs.orvix.ims.common.exception.BusinessException;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryTaskStatus;
-import com.pinetechs.orvix.ims.inventory.task.dto.AssignInventoryTaskStaffRequest;
+import com.pinetechs.orvix.ims.inventory.task.dto.AssignInventoryTaskStaffLocationRequest;
 import com.pinetechs.orvix.ims.inventory.task.dto.InventoryTaskAssignmentResponse;
 import com.pinetechs.orvix.ims.inventory.task.dto.StaffLocationAssignmentRequest;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
@@ -92,38 +92,27 @@ public class VehicleInventoryQueryServiceImpl implements VehicleInventoryQuerySe
 
     @Override
     @Transactional
-    public List<InventoryTaskAssignmentResponse> assignStaff(Long taskId, AssignInventoryTaskStaffRequest request, User currentUser) {
+    public List<InventoryTaskAssignmentResponse> assignStaff(Long taskId, AssignInventoryTaskStaffLocationRequest request, User currentUser) {
         InventoryTask task = getTask(taskId);
 
-        InventoryTaskStatus inventoryTaskStatus = request.getTaskStatus();
+        validateTaskCanBeAssigned(task);
 
-        accessPolicyService.assertCanAssignInventoryTaskUsers(currentUser, task.getCompany().getId(), task.getInventoryDomain());
+        InventoryTaskStatus nextStatus = resolveAssignmentTargetStatus(request);
 
-        if (request == null || request.getUserIds() == null || request.getUserIds().isEmpty()) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "At least one inventory staff user is required");
-        }
+        accessPolicyService.assertCanAssignInventoryTaskUsers(currentUser, task.getCompany().getId(), InventoryDomain.VEHICLE);
 
-        List<Long> userIds = normalizeIds(request.getUserIds());
-        if (userIds.isEmpty()) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "At least one inventory staff user is required");
-        }
-        if (inventoryTaskStatus == null){
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "Inventory task status is required");
-        }
+        Map<Long, List<Long>> requestedLocationIdsByUserId = normalizeLocationAssignments(
+                request.getLocationAssignments(),
+                "vehicle"
+        );
 
-        if (inventoryTaskStatus != InventoryTaskStatus.READY_TO_START && inventoryTaskStatus != InventoryTaskStatus.PAUSED) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "Inventory task must be in READY_TO_START or PAUSED status to assign staff");
-        }
+        validateEveryUserHasAtLeastOneLocation(requestedLocationIdsByUserId, "vehicle");
 
-
-
+        List<Long> userIds = new ArrayList<>(requestedLocationIdsByUserId.keySet());
         Map<Long, User> staffById = loadAndValidateStaffUsers(task, userIds);
-        Map<Long, List<Long>> requestedLocationIdsByUserId = normalizeLocationAssignments(request.getLocationAssignments(), userIds);
-        Map<Long, VehicleInventoryLocation> taskLocationsById = loadTaskLocationsById(task);
 
-        if (task.getInventoryDomain() == InventoryDomain.VEHICLE && !requestedLocationIdsByUserId.isEmpty()) {
-            validateRequestedLocationsBelongToTask(requestedLocationIdsByUserId, taskLocationsById);
-        }
+        Map<Long, VehicleInventoryLocation> taskLocationsById = loadTaskLocationsById(task);
+        validateRequestedLocationsBelongToTask(requestedLocationIdsByUserId, taskLocationsById);
 
         locationAssignmentRepository.deleteByTaskId(taskId);
         assignmentRepository.deleteByInventoryTaskId(taskId);
@@ -140,9 +129,7 @@ public class VehicleInventoryQueryServiceImpl implements VehicleInventoryQuerySe
             InventoryTaskAssignment savedAssignment = assignmentRepository.save(assignment);
             savedAssignments.add(savedAssignment);
 
-            List<Long> locationIds = requestedLocationIdsByUserId.getOrDefault(userId, List.of());
-
-            for (Long locationId : locationIds) {
+            for (Long locationId : requestedLocationIdsByUserId.get(userId)) {
                 VehicleInventoryLocationAssignment locationAssignment = new VehicleInventoryLocationAssignment();
                 locationAssignment.setAssignment(savedAssignment);
                 locationAssignment.setLocation(taskLocationsById.get(locationId));
@@ -151,7 +138,7 @@ public class VehicleInventoryQueryServiceImpl implements VehicleInventoryQuerySe
             }
         }
 
-        task.setStatus(inventoryTaskStatus);
+        task.setStatus(nextStatus);
         inventoryTaskRepository.save(task);
 
         return savedAssignments.stream()
@@ -164,15 +151,49 @@ public class VehicleInventoryQueryServiceImpl implements VehicleInventoryQuerySe
 
 
     private InventoryTask getTask(Long taskId) {
-        return inventoryTaskRepository.findById(taskId)
-                .orElseThrow(() -> new RuntimeException("Inventory task not found"));
+        InventoryTask task = inventoryTaskRepository.findById(taskId)
+                .orElseThrow(() -> new BusinessException(HttpStatus.BAD_REQUEST, "Inventory task not found"));
+
+        if (task.getInventoryDomain() != InventoryDomain.VEHICLE) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Task is not a vehicle inventory task");
+        }
+
+        return task;
     }
 
-    private List<Long> normalizeIds(List<Long> ids) {
-        return ids.stream()
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
+    private void validateTaskCanBeAssigned(InventoryTask task) {
+        if (task.getStatus() != InventoryTaskStatus.IMPORT_COMPLETED
+                && task.getStatus() != InventoryTaskStatus.READY_TO_START) {
+            throw new BusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    "Vehicle inventory staff can be assigned only when task is IMPORT_COMPLETED or READY_TO_START"
+            );
+        }
+    }
+
+    private InventoryTaskStatus resolveAssignmentTargetStatus(AssignInventoryTaskStaffLocationRequest request) {
+        if (request == null || request.getLocationAssignments() == null || request.getLocationAssignments().isEmpty()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "At least one vehicle inventory staff assignment is required");
+        }
+
+        InventoryTaskStatus requestedStatus = request.getTaskStatus();
+        if (requestedStatus == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Inventory task status is required");
+        }
+
+        if (requestedStatus == InventoryTaskStatus.DRAFT) {
+            return InventoryTaskStatus.IMPORT_COMPLETED;
+        }
+
+        if (requestedStatus != InventoryTaskStatus.IMPORT_COMPLETED
+                && requestedStatus != InventoryTaskStatus.READY_TO_START) {
+            throw new BusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    "Task status must be IMPORT_COMPLETED or READY_TO_START"
+            );
+        }
+
+        return requestedStatus;
     }
 
     private Map<Long, User> loadAndValidateStaffUsers(InventoryTask task, List<Long> userIds) {
@@ -198,51 +219,68 @@ public class VehicleInventoryQueryServiceImpl implements VehicleInventoryQuerySe
             if (!user.hasCompany(task.getCompany().getId())) {
                 throw new BusinessException(HttpStatus.BAD_REQUEST, "User " + user.getUsername() + " is not linked to the task company");
             }
-
-            /*if (!user.hasInventoryDomain(task.getInventoryDomain())) {
-                throw new BusinessException(HttpStatus.BAD_REQUEST, "User " + user.getUsername() + " is not allowed for " + task.getInventoryDomain() + " inventory");
-            }*/
         }
 
         return usersById;
     }
 
-
-    private Map<Long, List<Long>> normalizeLocationAssignments(List<StaffLocationAssignmentRequest> locationAssignments, List<Long> allowedUserIds) {
+    private Map<Long, List<Long>> normalizeLocationAssignments(
+            List<StaffLocationAssignmentRequest> locationAssignments,
+            String domainName
+    ) {
         if (locationAssignments == null || locationAssignments.isEmpty()) {
-            return new HashMap<>();
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "At least one " + domainName + " inventory staff assignment is required");
         }
 
-        Set<Long> allowedUserIdSet = new HashSet<>(allowedUserIds);
         Map<Long, List<Long>> locationIdsByUserId = new LinkedHashMap<>();
 
         for (StaffLocationAssignmentRequest assignmentRequest : locationAssignments) {
             if (assignmentRequest == null || assignmentRequest.getUserId() == null) {
-                continue;
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "User id is required in location assignment");
             }
 
-            if (!allowedUserIdSet.contains(assignmentRequest.getUserId())) {
-                throw new BusinessException(HttpStatus.BAD_REQUEST, "Location assignment contains a user that is not selected as staff");
+            Long userId = assignmentRequest.getUserId();
+
+            if (locationIdsByUserId.containsKey(userId)) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "Duplicate staff location assignment is not allowed. userId=" + userId);
             }
 
             List<Long> locationIds = assignmentRequest.getLocationIds() == null
                     ? List.of()
-                    : assignmentRequest.getLocationIds().stream()
+                    : assignmentRequest.getLocationIds()
+                    .stream()
                     .filter(Objects::nonNull)
                     .distinct()
                     .toList();
 
-            locationIdsByUserId.put(assignmentRequest.getUserId(), locationIds);
+            locationIdsByUserId.put(userId, locationIds);
         }
 
         return locationIdsByUserId;
     }
 
-    private Map<Long, VehicleInventoryLocation> loadTaskLocationsById(InventoryTask task) {
-        if (task.getInventoryDomain() != InventoryDomain.VEHICLE) {
-            return new HashMap<>();
+    private void validateEveryUserHasAtLeastOneLocation(
+            Map<Long, List<Long>> requestedLocationIdsByUserId,
+            String domainName
+    ) {
+        if (requestedLocationIdsByUserId == null || requestedLocationIdsByUserId.isEmpty()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "At least one " + domainName + " inventory staff assignment is required");
         }
 
+        for (Map.Entry<Long, List<Long>> entry : requestedLocationIdsByUserId.entrySet()) {
+            Long userId = entry.getKey();
+            List<Long> locationIds = entry.getValue();
+
+            if (locationIds == null || locationIds.isEmpty()) {
+                throw new BusinessException(
+                        HttpStatus.BAD_REQUEST,
+                        "Each " + domainName + " inventory staff user must have at least one assigned location. userId=" + userId
+                );
+            }
+        }
+    }
+
+    private Map<Long, VehicleInventoryLocation> loadTaskLocationsById(InventoryTask task) {
         return locationRepository.findByInventoryTaskId(task.getId())
                 .stream()
                 .collect(Collectors.toMap(VehicleInventoryLocation::getId, location -> location));
@@ -257,7 +295,7 @@ public class VehicleInventoryQueryServiceImpl implements VehicleInventoryQuerySe
         for (List<Long> locationIds : requestedLocationIdsByUserId.values()) {
             for (Long locationId : locationIds) {
                 if (!taskLocationIds.contains(locationId)) {
-                    throw new BusinessException(HttpStatus.BAD_REQUEST, "Location does not belong to this inventory task. locationId=" + locationId);
+                    throw new BusinessException(HttpStatus.BAD_REQUEST, "Location does not belong to this vehicle inventory task. locationId=" + locationId);
                 }
             }
         }

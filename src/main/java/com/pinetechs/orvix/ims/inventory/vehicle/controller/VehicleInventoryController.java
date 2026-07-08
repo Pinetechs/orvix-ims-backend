@@ -2,12 +2,10 @@ package com.pinetechs.orvix.ims.inventory.vehicle.controller;
 
 import com.pinetechs.orvix.ims.common.service.Helper;
 import com.pinetechs.orvix.ims.inventory.common.dto.UploadExcelResponse;
-import com.pinetechs.orvix.ims.inventory.task.dto.AssignInventoryTaskStaffRequest;
+import com.pinetechs.orvix.ims.inventory.task.dto.AssignInventoryTaskStaffLocationRequest;
 import com.pinetechs.orvix.ims.inventory.task.dto.InventoryTaskAssignmentResponse;
-import com.pinetechs.orvix.ims.inventory.vehicle.dto.VehicleInventoryImportResult;
 import com.pinetechs.orvix.ims.inventory.vehicle.dto.VehicleInventoryItemResponse;
 import com.pinetechs.orvix.ims.inventory.vehicle.dto.VehicleInventoryLocationResponse;
-import com.pinetechs.orvix.ims.inventory.vehicle.entity.VehicleInventoryItem;
 import com.pinetechs.orvix.ims.inventory.vehicle.service.VehicleInventoryQueryService;
 import com.pinetechs.orvix.ims.inventory.vehicle.service.impl.VehicleInventoryImportServiceImpl;
 import com.pinetechs.orvix.ims.user.entity.User;
@@ -63,7 +61,7 @@ public class VehicleInventoryController {
 
 
     @PostMapping("/{taskId}/assignments")
-    public List<InventoryTaskAssignmentResponse> assignStaff(@PathVariable Long taskId, @RequestBody AssignInventoryTaskStaffRequest request, Authentication authentication) {
+    public List<InventoryTaskAssignmentResponse> assignStaff(@PathVariable Long taskId, @RequestBody AssignInventoryTaskStaffLocationRequest request, Authentication authentication) {
         return vehicleInventoryQueryService.assignStaff(taskId, request, helper.currentUser(authentication));
     }
 

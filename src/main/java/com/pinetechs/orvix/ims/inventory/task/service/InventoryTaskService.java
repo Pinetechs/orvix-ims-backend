@@ -1,16 +1,12 @@
 package com.pinetechs.orvix.ims.inventory.task.service;
 
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryTaskStatus;
-import com.pinetechs.orvix.ims.inventory.task.dto.AssignInventoryTaskStaffRequest;
 import com.pinetechs.orvix.ims.inventory.task.dto.CreateInventoryTaskRequest;
-import com.pinetechs.orvix.ims.inventory.task.dto.InventoryTaskAssignmentResponse;
 import com.pinetechs.orvix.ims.inventory.task.dto.TaskResponse;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.user.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-
-import java.util.List;
 
 
 public interface InventoryTaskService {

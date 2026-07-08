@@ -8,7 +8,7 @@ import com.pinetechs.orvix.ims.inventory.asset.repository.*;
 import com.pinetechs.orvix.ims.inventory.asset.service.AssetInventoryQueryService;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryTaskStatus;
-import com.pinetechs.orvix.ims.inventory.task.dto.AssignInventoryTaskStaffRequest;
+import com.pinetechs.orvix.ims.inventory.task.dto.AssignInventoryTaskStaffLocationRequest;
 import com.pinetechs.orvix.ims.inventory.task.dto.StaffLocationAssignmentRequest;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTaskAssignment;
@@ -161,38 +161,26 @@ public class AssetInventoryQueryServiceImpl implements AssetInventoryQueryServic
 
     @Override
     @Transactional
-    public List<AssetInventoryAssignmentResponse> assignStaff(Long taskId, AssignInventoryTaskStaffRequest request, User currentUser) {
+    public List<AssetInventoryAssignmentResponse> assignStaff(Long taskId, AssignInventoryTaskStaffLocationRequest request, User currentUser) {
         InventoryTask task = getAssetTask(taskId);
 
+        validateTaskCanBeAssigned(task);
 
-        if (request == null || request.getUserIds() == null || request.getUserIds().isEmpty()) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "At least one inventory staff user is required");
-        }
-
-        InventoryTaskStatus inventoryTaskStatus = request.getTaskStatus();
-        if (inventoryTaskStatus == null) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "Inventory task status is required");
-        }
-        if (inventoryTaskStatus == InventoryTaskStatus.DRAFT){
-            inventoryTaskStatus = InventoryTaskStatus.IMPORT_COMPLETED;
-        }
-
-        if (inventoryTaskStatus != InventoryTaskStatus.READY_TO_START && inventoryTaskStatus != InventoryTaskStatus.IMPORT_COMPLETED) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "Inventory task must be in READY_TO_START or IMPORT COMPLETED status to assign staff");
-        }
+        InventoryTaskStatus nextStatus = resolveAssignmentTargetStatus(request);
 
         accessPolicyService.assertCanAssignInventoryTaskUsers(currentUser, task.getCompany().getId(), InventoryDomain.ASSET);
 
-        List<Long> userIds = normalizeIds(request.getUserIds());
-        if (userIds.isEmpty()) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST, "At least one inventory staff user is required");
-        }
+        Map<Long, List<Long>> requestedLocationIdsByUserId = normalizeLocationAssignments(
+                request.getLocationAssignments(),
+                "asset"
+        );
 
+        validateEveryUserHasAtLeastOneLocation(requestedLocationIdsByUserId, "asset");
+
+        List<Long> userIds = new ArrayList<>(requestedLocationIdsByUserId.keySet());
         Map<Long, User> staffById = loadAndValidateStaffUsers(task, userIds);
-        Map<Long, List<Long>> requestedLocationIdsByUserId = normalizeLocationAssignments(request.getLocationAssignments(), userIds);
-        validateEveryUserHasAtLeastOneLocation(userIds, requestedLocationIdsByUserId);
-        Map<Long, AssetInventoryLocation> taskLocationsById = loadTaskLocationsById(task);
 
+        Map<Long, AssetInventoryLocation> taskLocationsById = loadTaskLocationsById(task);
         validateRequestedLocationsBelongToTask(requestedLocationIdsByUserId, taskLocationsById);
 
         locationAssignmentRepository.deleteByTaskId(taskId);
@@ -210,9 +198,7 @@ public class AssetInventoryQueryServiceImpl implements AssetInventoryQueryServic
             InventoryTaskAssignment savedAssignment = assignmentRepository.save(assignment);
             savedAssignments.add(savedAssignment);
 
-            List<Long> locationIds = requestedLocationIdsByUserId.getOrDefault(userId, List.of());
-
-            for (Long locationId : locationIds) {
+            for (Long locationId : requestedLocationIdsByUserId.get(userId)) {
                 AssetInventoryLocationAssignment locationAssignment = new AssetInventoryLocationAssignment();
                 locationAssignment.setAssignment(savedAssignment);
                 locationAssignment.setLocation(taskLocationsById.get(locationId));
@@ -221,7 +207,7 @@ public class AssetInventoryQueryServiceImpl implements AssetInventoryQueryServic
             }
         }
 
-        task.setStatus(inventoryTaskStatus);
+        task.setStatus(nextStatus);
         inventoryTaskRepository.save(task);
 
         return savedAssignments.stream()
@@ -261,11 +247,39 @@ public class AssetInventoryQueryServiceImpl implements AssetInventoryQueryServic
                 .orElseThrow(() -> new BusinessException(HttpStatus.BAD_REQUEST, "Location does not belong to this asset inventory task"));
     }
 
-    private List<Long> normalizeIds(List<Long> ids) {
-        return ids.stream()
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
+    private void validateTaskCanBeAssigned(InventoryTask task) {
+        if (task.getStatus() != InventoryTaskStatus.IMPORT_COMPLETED
+                && task.getStatus() != InventoryTaskStatus.READY_TO_START) {
+            throw new BusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    "Asset inventory staff can be assigned only when task is IMPORT_COMPLETED or READY_TO_START"
+            );
+        }
+    }
+
+    private InventoryTaskStatus resolveAssignmentTargetStatus(AssignInventoryTaskStaffLocationRequest request) {
+        if (request == null || request.getLocationAssignments() == null || request.getLocationAssignments().isEmpty()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "At least one asset inventory staff assignment is required");
+        }
+
+        InventoryTaskStatus requestedStatus = request.getTaskStatus();
+        if (requestedStatus == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Inventory task status is required");
+        }
+
+        if (requestedStatus == InventoryTaskStatus.DRAFT) {
+            return InventoryTaskStatus.IMPORT_COMPLETED;
+        }
+
+        if (requestedStatus != InventoryTaskStatus.IMPORT_COMPLETED
+                && requestedStatus != InventoryTaskStatus.READY_TO_START) {
+            throw new BusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    "Task status must be IMPORT_COMPLETED or READY_TO_START"
+            );
+        }
+
+        return requestedStatus;
     }
 
     private Map<Long, User> loadAndValidateStaffUsers(InventoryTask task, List<Long> userIds) {
@@ -296,41 +310,58 @@ public class AssetInventoryQueryServiceImpl implements AssetInventoryQueryServic
         return usersById;
     }
 
-    private Map<Long, List<Long>> normalizeLocationAssignments(List<StaffLocationAssignmentRequest> locationAssignments, List<Long> allowedUserIds) {
+    private Map<Long, List<Long>> normalizeLocationAssignments(
+            List<StaffLocationAssignmentRequest> locationAssignments,
+            String domainName
+    ) {
         if (locationAssignments == null || locationAssignments.isEmpty()) {
-            return new HashMap<>();
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "At least one " + domainName + " inventory staff assignment is required");
         }
 
-        Set<Long> allowedUserIdSet = new HashSet<>(allowedUserIds);
         Map<Long, List<Long>> locationIdsByUserId = new LinkedHashMap<>();
 
         for (StaffLocationAssignmentRequest assignmentRequest : locationAssignments) {
             if (assignmentRequest == null || assignmentRequest.getUserId() == null) {
-                continue;
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "User id is required in location assignment");
             }
 
-            if (!allowedUserIdSet.contains(assignmentRequest.getUserId())) {
-                throw new BusinessException(HttpStatus.BAD_REQUEST, "Location assignment contains a user that is not selected as staff");
+            Long userId = assignmentRequest.getUserId();
+
+            if (locationIdsByUserId.containsKey(userId)) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "Duplicate staff location assignment is not allowed. userId=" + userId);
             }
 
             List<Long> locationIds = assignmentRequest.getLocationIds() == null
                     ? List.of()
-                    : assignmentRequest.getLocationIds().stream()
+                    : assignmentRequest.getLocationIds()
+                    .stream()
                     .filter(Objects::nonNull)
                     .distinct()
                     .toList();
 
-            locationIdsByUserId.put(assignmentRequest.getUserId(), locationIds);
+            locationIdsByUserId.put(userId, locationIds);
         }
 
         return locationIdsByUserId;
     }
 
-    private void validateEveryUserHasAtLeastOneLocation(List<Long> userIds, Map<Long, List<Long>> requestedLocationIdsByUserId) {
-        for (Long userId : userIds) {
-            List<Long> locationIds = requestedLocationIdsByUserId.getOrDefault(userId, List.of());
-            if (locationIds.isEmpty()) {
-                throw new BusinessException(HttpStatus.BAD_REQUEST, "Each asset inventory staff user must have at least one assigned location. userId=" + userId);
+    private void validateEveryUserHasAtLeastOneLocation(
+            Map<Long, List<Long>> requestedLocationIdsByUserId,
+            String domainName
+    ) {
+        if (requestedLocationIdsByUserId == null || requestedLocationIdsByUserId.isEmpty()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "At least one " + domainName + " inventory staff assignment is required");
+        }
+
+        for (Map.Entry<Long, List<Long>> entry : requestedLocationIdsByUserId.entrySet()) {
+            Long userId = entry.getKey();
+            List<Long> locationIds = entry.getValue();
+
+            if (locationIds == null || locationIds.isEmpty()) {
+                throw new BusinessException(
+                        HttpStatus.BAD_REQUEST,
+                        "Each " + domainName + " inventory staff user must have at least one assigned location. userId=" + userId
+                );
             }
         }
     }

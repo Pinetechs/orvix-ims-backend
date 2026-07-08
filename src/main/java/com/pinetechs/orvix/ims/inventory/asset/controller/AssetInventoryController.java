@@ -6,7 +6,7 @@ import com.pinetechs.orvix.ims.inventory.asset.service.AssetInventoryImportServi
 import com.pinetechs.orvix.ims.inventory.asset.service.AssetInventoryQueryService;
 import com.pinetechs.orvix.ims.inventory.asset.service.AssetInventoryScanService;
 import com.pinetechs.orvix.ims.inventory.common.dto.UploadExcelResponse;
-import com.pinetechs.orvix.ims.inventory.task.dto.AssignInventoryTaskStaffRequest;
+import com.pinetechs.orvix.ims.inventory.task.dto.AssignInventoryTaskStaffLocationRequest;
 import com.pinetechs.orvix.ims.user.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -119,7 +119,7 @@ public class AssetInventoryController {
     @PostMapping("/{taskId}/assignments")
     public List<AssetInventoryAssignmentResponse> assignStaff(
             @PathVariable Long taskId,
-            @RequestBody AssignInventoryTaskStaffRequest request,
+            @RequestBody AssignInventoryTaskStaffLocationRequest request,
             Authentication authentication
     ) {
         return assetInventoryQueryService.assignStaff(taskId, request, helper.currentUser(authentication));

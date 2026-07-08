@@ -1,7 +1,7 @@
 package com.pinetechs.orvix.ims.inventory.asset.service;
 
 import com.pinetechs.orvix.ims.inventory.asset.dto.*;
-import com.pinetechs.orvix.ims.inventory.task.dto.AssignInventoryTaskStaffRequest;
+import com.pinetechs.orvix.ims.inventory.task.dto.AssignInventoryTaskStaffLocationRequest;
 import com.pinetechs.orvix.ims.user.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -24,5 +24,5 @@ public interface AssetInventoryQueryService {
 
     List<AssetInventoryAssignmentResponse> getAssignments(Long taskId, User currentUser);
 
-    List<AssetInventoryAssignmentResponse> assignStaff(Long taskId, AssignInventoryTaskStaffRequest request, User currentUser);
+    List<AssetInventoryAssignmentResponse> assignStaff(Long taskId, AssignInventoryTaskStaffLocationRequest request, User currentUser);
 }

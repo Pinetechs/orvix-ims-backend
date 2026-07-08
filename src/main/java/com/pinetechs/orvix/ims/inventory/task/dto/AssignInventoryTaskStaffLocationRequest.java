@@ -5,19 +5,10 @@ import com.pinetechs.orvix.ims.inventory.common.enums.InventoryTaskStatus;
 import java.util.ArrayList;
 import java.util.List;
 
-public class AssignInventoryTaskStaffRequest {
+public class AssignInventoryTaskStaffLocationRequest {
 
-    private List<Long> userIds = new ArrayList<>();
     private List<StaffLocationAssignmentRequest> locationAssignments = new ArrayList<>();
     private InventoryTaskStatus taskStatus;
-
-    public List<Long> getUserIds() {
-        return userIds;
-    }
-
-    public void setUserIds(List<Long> userIds) {
-        this.userIds = userIds;
-    }
 
     public List<StaffLocationAssignmentRequest> getLocationAssignments() {
         return locationAssignments;
