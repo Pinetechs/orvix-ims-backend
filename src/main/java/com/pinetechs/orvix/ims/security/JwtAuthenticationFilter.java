@@ -87,7 +87,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private TokenSource resolveToken(HttpServletRequest request) {
         String path = request.getRequestURI();
 
-        if (path != null && path.startsWith("/api/mobile/")) {
+        if (isAppRequest(path)) {
             return resolveBearerToken(request);
         }
 
@@ -139,11 +139,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return true;
         }
 
-        if (path != null && path.startsWith("/api/mobile/")) {
-            return tokenSource.channel == AccessChannel.MOBILE && userChannel == AccessChannel.MOBILE;
+        if (isAppRequest(path)) {
+            return tokenSource.channel == AccessChannel.APP
+                    && (userChannel == AccessChannel.APP || userChannel == AccessChannel.BOTH);
         }
 
-        return tokenSource.channel == AccessChannel.WEB && userChannel == AccessChannel.WEB;
+        return tokenSource.channel == AccessChannel.WEB
+                && (userChannel == AccessChannel.WEB || userChannel == AccessChannel.BOTH);
+    }
+
+    private boolean isAppRequest(String path) {
+        return path != null && path.startsWith("/api/app/");
     }
 
     private static class TokenSource {

@@ -54,21 +54,6 @@ public class AuthController {
         return new LoginResponse(token, UserResponse.from(principal.getUser()));
     }
 
-    /**
-     * Mobile app login.
-     * The token is returned in body and must be sent as Authorization: Bearer <token>.
-     */
-    @PostMapping("/mobile/login")
-    public LoginResponse mobileLogin(@Valid @RequestBody LoginRequest request) {
-        JwtUserDetails principal = authenticate(request);
-        if (principal.getUser().getAccessChannel() != AccessChannel.MOBILE) {
-            throw new IllegalArgumentException("User is not allowed to access the mobile app");
-        }
-
-        String token = jwtTokenService.generateToken(principal.getUser(), AccessChannel.MOBILE.name());
-        return new LoginResponse(token, UserResponse.from(principal.getUser()));
-    }
-
     @GetMapping("/me")
     public UserResponse me(Authentication authentication) {
         JwtUserDetails principal = (JwtUserDetails) authentication.getPrincipal();

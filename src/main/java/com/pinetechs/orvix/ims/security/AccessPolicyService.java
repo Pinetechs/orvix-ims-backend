@@ -322,11 +322,11 @@ public class AccessPolicyService {
         throw new AccessDeniedException("Inventory staff cannot access web reports");
     }
 
-    public void assertCanUseMobile(User user) {
-        if (user != null && user.isInventoryStaff() && user.hasPermission(PermissionCode.MOBILE_SCAN_CREATE)) {
+    public void assertCanUseApp(User user) {
+        if (user != null && user.isInventoryStaff() && user.hasPermission(PermissionCode.APP_TASK_LIST)) {
             return;
         }
-        throw new AccessDeniedException("Only inventory staff can use the mobile inventory app");
+        throw new AccessDeniedException("Only authorized inventory staff can use the inventory app");
     }
 
     private PermissionCode taskCreatePermission(InventoryDomain domain) {

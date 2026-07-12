@@ -65,4 +65,18 @@ public interface VehicleInventoryLocationAssignmentRepository extends JpaReposit
              and locationAssignment.active = true
            """)
     List<VehicleInventoryLocationAssignment> findActiveByAssignmentIdWithLocation(@Param("assignmentId") Long assignmentId);
+
+    @Query("""
+           select locationAssignment
+           from VehicleInventoryLocationAssignment locationAssignment
+           join fetch locationAssignment.location
+           where locationAssignment.assignment.inventoryTask.id = :taskId
+             and locationAssignment.assignment.user.id = :userId
+             and locationAssignment.active = true
+             and locationAssignment.assignment.active = true
+           """)
+    List<VehicleInventoryLocationAssignment> findActiveByTaskIdAndUserIdWithLocation(
+            @Param("taskId") Long taskId,
+            @Param("userId") Long userId
+    );
 }

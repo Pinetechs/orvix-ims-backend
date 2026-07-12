@@ -225,7 +225,7 @@ public class UserManagementService {
             }
         }
         user.setCompanies(companies);
-        user.setAccessChannel(user.isInventoryStaff() ? AccessChannel.MOBILE : AccessChannel.WEB);
+        user.setAccessChannel(user.isInventoryStaff() ? AccessChannel.APP : AccessChannel.WEB);
     }
 
     private void validateUserRules(User user) {
@@ -257,12 +257,12 @@ public class UserManagementService {
             }
         }
         if (user.isInventoryStaff()) {
-            if (user.getAccessChannel() != AccessChannel.MOBILE) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Inventory staff must use mobile channel");
+            if (user.getAccessChannel() != AccessChannel.APP) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Inventory staff must use app channel");
             }
         }
-        if (!user.isInventoryStaff() && user.getAccessChannel() == AccessChannel.MOBILE) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only inventory staff can be mobile-only user");
+        if (!user.isInventoryStaff() && user.getAccessChannel() == AccessChannel.APP) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only inventory staff can be an app-only user");
         }
     }
 

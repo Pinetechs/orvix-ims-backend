@@ -61,14 +61,14 @@ public class User {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "access_channel", nullable = false, length = 20)
-    private AccessChannel accessChannel = AccessChannel.MOBILE;
+    private AccessChannel accessChannel = AccessChannel.APP;
 
     /**
      * Companies that the user is allowed to work on.
      * SYSTEM_ADMIN: empty set, because he manages the platform globally.
      * COMPANY_ADMIN: one or more companies, reports only.
      * SUPERVISOR: one or more companies, task operations + reports according to inventoryDomains.
-     * INVENTORY_STAFF: mobile user; task assignment will control the actual work, but company scope is still stored.
+     * INVENTORY_STAFF: app user; task assignment controls the actual work, but company scope is still stored.
      */
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
@@ -114,7 +114,7 @@ public class User {
         if (enabled == null) enabled = true;
         if (deleted == null) deleted = false;
         if (userType == null) userType = UserType.INVENTORY_STAFF;
-        if (accessChannel == null) accessChannel = AccessChannel.MOBILE;
+        if (accessChannel == null) accessChannel = AccessChannel.APP;
         if (username != null) username = username.trim().toLowerCase();
     }
 

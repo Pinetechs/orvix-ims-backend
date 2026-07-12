@@ -49,10 +49,10 @@ public final class PermissionTemplate {
 
         if (userType == UserType.INVENTORY_STAFF) {
             return new HashSet<>(EnumSet.of(
-                    PermissionCode.MOBILE_TASK_LIST,
-                    PermissionCode.MOBILE_SCAN_CREATE,
-                    PermissionCode.MOBILE_QUANTITY_ENTRY,
-                    PermissionCode.MOBILE_LOCATION_CHANGE
+                    PermissionCode.APP_TASK_LIST,
+                    PermissionCode.APP_SCAN_CREATE,
+                    PermissionCode.APP_QUANTITY_ENTRY,
+                    PermissionCode.APP_LOCATION_CHANGE
             ));
         }
 

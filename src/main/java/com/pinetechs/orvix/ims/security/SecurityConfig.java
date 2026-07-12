@@ -55,7 +55,7 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/auth/login",
                                 "/api/auth/web/login",
-                                "/api/auth/mobile/login",
+                                "/api/app/v1/auth/login",
                                 "/api/settings/all",
                                 "/api/settings/**",
                                 "/api/public/**",
