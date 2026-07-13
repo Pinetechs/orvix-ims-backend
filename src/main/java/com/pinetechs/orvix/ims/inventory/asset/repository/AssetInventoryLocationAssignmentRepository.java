@@ -1,6 +1,8 @@
 package com.pinetechs.orvix.ims.inventory.asset.repository;
 
 import com.pinetechs.orvix.ims.inventory.asset.entity.AssetInventoryLocationAssignment;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -61,6 +63,23 @@ public interface AssetInventoryLocationAssignmentRepository extends JpaRepositor
     List<AssetInventoryLocationAssignment> findActiveByTaskIdAndUserIdWithLocation(
             @Param("taskId") Long taskId,
             @Param("userId") Long userId
+    );
+
+
+
+    @Query("""
+           select locationAssignment
+           from AssetInventoryLocationAssignment locationAssignment
+           join fetch locationAssignment.location
+           where locationAssignment.assignment.inventoryTask.id = :taskId
+             and locationAssignment.assignment.user.id = :userId
+             and locationAssignment.active = true
+             and locationAssignment.assignment.active = true
+           """)
+    Slice<AssetInventoryLocationAssignment> findActiveByTaskIdAndUserIdWithLocationSlice(
+            @Param("taskId") Long taskId,
+            @Param("userId") Long userId,
+            Pageable pageable
     );
 
     @Query("""

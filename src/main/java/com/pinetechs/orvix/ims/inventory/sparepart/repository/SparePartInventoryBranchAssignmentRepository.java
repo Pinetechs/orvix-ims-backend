@@ -1,6 +1,8 @@
 package com.pinetechs.orvix.ims.inventory.sparepart.repository;
 
 import com.pinetechs.orvix.ims.inventory.sparepart.entity.SparePartInventoryBranchAssignment;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -53,6 +55,26 @@ public interface SparePartInventoryBranchAssignmentRepository extends JpaReposit
             @Param("taskId") Long taskId,
             @Param("userId") Long userId
     );
+
+
+
+
+
+    @Query("""
+           select branchAssignment
+           from SparePartInventoryBranchAssignment branchAssignment
+           join fetch branchAssignment.branch
+           where branchAssignment.assignment.inventoryTask.id = :taskId
+             and branchAssignment.assignment.user.id = :userId
+             and branchAssignment.active = true
+             and branchAssignment.assignment.active = true
+           """)
+    Slice<SparePartInventoryBranchAssignment> findActiveByTaskIdAndUserIdWithBranchSlice(
+            @Param("taskId") Long taskId,
+            @Param("userId") Long userId,
+            Pageable pageable
+    );
+
 
     @Query("""
            select case when count(branchAssignment.id) > 0 then true else false end
