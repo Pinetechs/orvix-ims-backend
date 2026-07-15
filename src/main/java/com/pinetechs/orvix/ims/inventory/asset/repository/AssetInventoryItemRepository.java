@@ -7,6 +7,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
@@ -15,6 +17,20 @@ import java.util.Optional;
 public interface AssetInventoryItemRepository extends JpaRepository<AssetInventoryItem, Long> {
 
     Optional<AssetInventoryItem> findByInventoryTaskIdAndBarcode(Long taskId, String barcode);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select item from AssetInventoryItem item where item.inventoryTask.id = :taskId and upper(item.barcode) = upper(:barcode)")
+    Optional<AssetInventoryItem> findForUpdateByTaskIdAndBarcode(
+            @Param("taskId") Long taskId,
+            @Param("barcode") String barcode
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select item from AssetInventoryItem item where item.id = :itemId and item.inventoryTask.id = :taskId")
+    Optional<AssetInventoryItem> findForUpdateByTaskIdAndId(
+            @Param("taskId") Long taskId,
+            @Param("itemId") Long itemId
+    );
 
     boolean existsByInventoryTaskIdAndBarcode(Long taskId, String barcode);
 

@@ -25,6 +25,7 @@ public class AppTaskSummaryResponse {
     private Integer processedRecords;
     private Integer progress;
     private LocalDateTime assignedAt;
+    private boolean scanImageRequired;
 
     public static AppTaskSummaryResponse from(InventoryTaskAssignment assignment) {
         InventoryTask task = assignment.getInventoryTask();
@@ -37,6 +38,7 @@ public class AppTaskSummaryResponse {
         response.inventoryDomain = task.getInventoryDomain();
         response.status = task.getStatus();
         response.startDate = task.getStartDate();
+        response.scanImageRequired = task.isScanImageRequired();
         response.totalRecords = valueOrZero(task.getTotalRecords());
         response.processedRecords = valueOrZero(task.getProcessedRecords());
              response.progress = (int) Math.round(task.getProgressPercentage());
@@ -66,6 +68,10 @@ public class AppTaskSummaryResponse {
     public LocalDate getStartDate() { return startDate; }
     public Integer getTotalRecords() { return totalRecords; }
     public Integer getProcessedRecords() { return processedRecords; }
+
+    public boolean isScanImageRequired() {
+        return scanImageRequired;
+    }
 
     public Integer getProgress() { return progress; }
     public LocalDateTime getAssignedAt() { return assignedAt; }

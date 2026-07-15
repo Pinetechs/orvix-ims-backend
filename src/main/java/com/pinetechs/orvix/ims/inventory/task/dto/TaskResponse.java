@@ -27,6 +27,7 @@ public class TaskResponse {
     private Integer mismatchRecords ;
     private Long importJobId;
     private CompanyResponse company ;
+    private boolean scanImageRequired;
 
 
     public static TaskResponse from(InventoryTask task) {
@@ -47,6 +48,7 @@ public class TaskResponse {
         response.setMatchedRecords(task.getMatchedRecords());
         response.setMismatchRecords( task.getProcessedRecords() - task.getMatchedRecords());
         response.setImportJobId(task.getImportJobId());
+        response.setScanImageRequired(task.isScanImageRequired());
         User createdBy = task.getCreatedBy();
         if (createdBy != null) {
             String fullName = createdBy.getFullName();
@@ -124,6 +126,12 @@ public class TaskResponse {
 
     public void setId(String id) {
         this.id = id;
+    }
+
+    public boolean isScanImageRequired() { return scanImageRequired; }
+
+    public void setScanImageRequired(boolean scanImageRequired) {
+        this.scanImageRequired = scanImageRequired;
     }
 
     public String getTaskName() {

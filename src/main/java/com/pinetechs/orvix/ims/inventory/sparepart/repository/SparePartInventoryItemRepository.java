@@ -7,6 +7,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
@@ -17,6 +19,35 @@ public interface SparePartInventoryItemRepository extends JpaRepository<SparePar
     Optional<SparePartInventoryItem> findByInventoryTaskIdAndItemNoAndPlannedBranchIdAndPlannedLocationId(Long taskId, String itemNo, Long branchId, Long locationId);
 
     List<SparePartInventoryItem> findByInventoryTaskIdAndItemNo(Long taskId, String itemNo);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+           select item from SparePartInventoryItem item
+           where item.inventoryTask.id = :taskId
+             and upper(item.itemNo) = upper(:itemNo)
+             and item.plannedBranch.id = :branchId
+             and item.plannedLocation.id = :locationId
+           """)
+    Optional<SparePartInventoryItem> findExactForUpdate(
+            @Param("taskId") Long taskId,
+            @Param("itemNo") String itemNo,
+            @Param("branchId") Long branchId,
+            @Param("locationId") Long locationId
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select item from SparePartInventoryItem item where item.inventoryTask.id = :taskId and upper(item.itemNo) = upper(:itemNo) order by item.id")
+    List<SparePartInventoryItem> findCandidatesForUpdate(
+            @Param("taskId") Long taskId,
+            @Param("itemNo") String itemNo
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select item from SparePartInventoryItem item where item.id = :itemId and item.inventoryTask.id = :taskId")
+    Optional<SparePartInventoryItem> findForUpdateByTaskIdAndId(
+            @Param("taskId") Long taskId,
+            @Param("itemId") Long itemId
+    );
 
     Page<SparePartInventoryItem> findByInventoryTaskIdOrderByIdAsc(Long taskId, Pageable pageable);
 

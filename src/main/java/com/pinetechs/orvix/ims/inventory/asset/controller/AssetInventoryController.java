@@ -126,11 +126,15 @@ public class AssetInventoryController {
     }
 
     @PostMapping("/{taskId}/scan")
+    @Deprecated
     public AssetInventoryScanResponse scan(
             @PathVariable Long taskId,
             @RequestBody AssetInventoryScanRequest request,
             Authentication authentication
     ) {
-        return assetInventoryScanService.scan(taskId, request, helper.currentUser(authentication));
+        throw new com.pinetechs.orvix.ims.common.exception.BusinessException(
+                org.springframework.http.HttpStatus.GONE,
+                "Legacy scan endpoint was retired; use /api/app/v1/tasks/{taskId}/scans"
+        );
     }
 }

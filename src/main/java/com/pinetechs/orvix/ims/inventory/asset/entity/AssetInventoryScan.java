@@ -1,6 +1,9 @@
 package com.pinetechs.orvix.ims.inventory.asset.entity;
 
 import com.pinetechs.orvix.ims.inventory.asset.enums.AssetInventoryScanResult;
+import com.pinetechs.orvix.ims.file.entity.UploadedFile;
+import com.pinetechs.orvix.ims.inventory.common.enums.InventoryScanEventType;
+import com.pinetechs.orvix.ims.inventory.common.enums.InventoryScanImageSource;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.user.entity.User;
 import jakarta.persistence.*;
@@ -19,8 +22,13 @@ import java.time.LocalDateTime;
                 @Index(name = "idx_asset_inv_scans_result", columnList = "scan_result"),
                 @Index(name = "idx_asset_inv_scans_actual_location", columnList = "actual_location_id"),
                 @Index(name = "idx_asset_inv_scans_actual_floor", columnList = "actual_floor_id"),
-                @Index(name = "idx_asset_inv_scans_actual_place", columnList = "actual_place_id")
-        }
+                @Index(name = "idx_asset_inv_scans_actual_place", columnList = "actual_place_id"),
+                @Index(name = "idx_asset_inv_scans_client", columnList = "client_scan_id")
+        },
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_asset_scan_task_client",
+                columnNames = {"task_id", "client_scan_id"}
+        )
 )
 public class AssetInventoryScan {
 
@@ -46,6 +54,40 @@ public class AssetInventoryScan {
     @Enumerated(EnumType.STRING)
     @Column(name = "scan_result", nullable = false, length = 50)
     private AssetInventoryScanResult scanResult;
+
+    @Column(name = "client_scan_id", nullable = false, length = 36)
+    private String clientScanId;
+
+    @Column(name = "payload_hash", nullable = false, length = 64)
+    private String payloadHash;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "event_type", nullable = false, length = 30)
+    private InventoryScanEventType eventType;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "corrects_scan_id")
+    private AssetInventoryScan correctsScan;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "scan_image_file_id", unique = true)
+    private UploadedFile scanImage;
+
+    @Column(name = "mismatch_fields", length = 100)
+    private String mismatchFields;
+
+    @Column(name = "device_scanned_at")
+    private LocalDateTime deviceScannedAt;
+
+    @Column(name = "device_id", length = 150)
+    private String deviceId;
+
+    @Column(name = "symbology", length = 80)
+    private String symbology;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "image_source", length = 40)
+    private InventoryScanImageSource imageSource;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "expected_location_id")
@@ -105,4 +147,24 @@ public class AssetInventoryScan {
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
     public LocalDateTime getScannedAt() { return scannedAt; }
+    public String getClientScanId() { return clientScanId; }
+    public void setClientScanId(String clientScanId) { this.clientScanId = clientScanId; }
+    public String getPayloadHash() { return payloadHash; }
+    public void setPayloadHash(String payloadHash) { this.payloadHash = payloadHash; }
+    public InventoryScanEventType getEventType() { return eventType; }
+    public void setEventType(InventoryScanEventType eventType) { this.eventType = eventType; }
+    public AssetInventoryScan getCorrectsScan() { return correctsScan; }
+    public void setCorrectsScan(AssetInventoryScan correctsScan) { this.correctsScan = correctsScan; }
+    public UploadedFile getScanImage() { return scanImage; }
+    public void setScanImage(UploadedFile scanImage) { this.scanImage = scanImage; }
+    public String getMismatchFields() { return mismatchFields; }
+    public void setMismatchFields(String mismatchFields) { this.mismatchFields = mismatchFields; }
+    public LocalDateTime getDeviceScannedAt() { return deviceScannedAt; }
+    public void setDeviceScannedAt(LocalDateTime deviceScannedAt) { this.deviceScannedAt = deviceScannedAt; }
+    public String getDeviceId() { return deviceId; }
+    public void setDeviceId(String deviceId) { this.deviceId = deviceId; }
+    public String getSymbology() { return symbology; }
+    public void setSymbology(String symbology) { this.symbology = symbology; }
+    public InventoryScanImageSource getImageSource() { return imageSource; }
+    public void setImageSource(InventoryScanImageSource imageSource) { this.imageSource = imageSource; }
 }

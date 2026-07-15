@@ -329,6 +329,25 @@ public class AccessPolicyService {
         throw new AccessDeniedException("Only authorized inventory staff can use the inventory app");
     }
 
+    public void assertCanCreateAppScan(User user) {
+        assertAppPermission(user, PermissionCode.APP_SCAN_CREATE, "App scan permission is required");
+    }
+
+    public void assertCanEnterAppQuantity(User user) {
+        assertAppPermission(user, PermissionCode.APP_QUANTITY_ENTRY, "App quantity entry permission is required");
+    }
+
+    public void assertCanCorrectAppScan(User user) {
+        assertAppPermission(user, PermissionCode.APP_LOCATION_CHANGE, "App scan correction permission is required");
+    }
+
+    private void assertAppPermission(User user, PermissionCode permission, String message) {
+        if (user != null && user.isInventoryStaff() && user.hasPermission(permission)) {
+            return;
+        }
+        throw new AccessDeniedException(message);
+    }
+
     private PermissionCode taskCreatePermission(InventoryDomain domain) {
         if (domain == InventoryDomain.VEHICLE) return PermissionCode.VEHICLE_TASK_CREATE;
         if (domain == InventoryDomain.ASSET) return PermissionCode.ASSET_TASK_CREATE;

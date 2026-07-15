@@ -151,6 +151,10 @@ public class AssetInventoryItem {
     @JoinColumn(name = "checked_by_user_id")
     private User checkedBy;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "current_scan_id")
+    private AssetInventoryScan currentScan;
+
     @Column(name = "checked_at")
     private LocalDateTime checkedAt;
 
@@ -235,6 +239,8 @@ public class AssetInventoryItem {
     public void setStatus(AssetInventoryItemStatus status) { this.status = status; }
     public User getCheckedBy() { return checkedBy; }
     public void setCheckedBy(User checkedBy) { this.checkedBy = checkedBy; }
+    public AssetInventoryScan getCurrentScan() { return currentScan; }
+    public void setCurrentScan(AssetInventoryScan currentScan) { this.currentScan = currentScan; }
     public LocalDateTime getCheckedAt() { return checkedAt; }
     public void setCheckedAt(LocalDateTime checkedAt) { this.checkedAt = checkedAt; }
     public String getNotes() { return notes; }

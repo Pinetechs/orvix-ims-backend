@@ -25,4 +25,23 @@ public interface SparePartInventoryBranchRepository extends JpaRepository<SpareP
            where branch.inventoryTask.id = :taskId
            """)
     int deleteByTaskId(@Param("taskId") Long taskId);
+
+    @Modifying(flushAutomatically = true)
+    @Query("""
+           update SparePartInventoryBranch branch
+              set branch.countedItems = branch.countedItems + :countedDelta,
+                  branch.matchedItems = branch.matchedItems + :matchedDelta,
+                  branch.shortageItems = branch.shortageItems + :shortageDelta,
+                  branch.overageItems = branch.overageItems + :overageDelta,
+                  branch.locationMismatchItems = branch.locationMismatchItems + :locationMismatchDelta
+            where branch.id = :branchId
+           """)
+    int adjustScanCounters(
+            @Param("branchId") Long branchId,
+            @Param("countedDelta") int countedDelta,
+            @Param("matchedDelta") int matchedDelta,
+            @Param("shortageDelta") int shortageDelta,
+            @Param("overageDelta") int overageDelta,
+            @Param("locationMismatchDelta") int locationMismatchDelta
+    );
 }

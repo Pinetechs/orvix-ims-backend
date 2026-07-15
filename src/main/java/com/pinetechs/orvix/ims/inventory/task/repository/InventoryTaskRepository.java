@@ -11,10 +11,12 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDate;
 
 public interface InventoryTaskRepository extends JpaRepository<InventoryTask, Long>, JpaSpecificationExecutor<InventoryTask> {
 
@@ -39,4 +41,32 @@ public interface InventoryTaskRepository extends JpaRepository<InventoryTask, Lo
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select t from InventoryTask t where t.id = :taskId")
     Optional<InventoryTask> findByIdForUpdate(@Param("taskId") Long taskId);
+
+    @Modifying(flushAutomatically = true)
+    @Query("""
+           update InventoryTask task
+              set task.processedRecords = task.processedRecords + :processedDelta,
+                  task.matchedRecords = task.matchedRecords + :matchedDelta
+            where task.id = :taskId
+           """)
+    int adjustScanCounters(
+            @Param("taskId") Long taskId,
+            @Param("processedDelta") int processedDelta,
+            @Param("matchedDelta") int matchedDelta
+    );
+
+    @Modifying(flushAutomatically = true)
+    @Query("""
+           update InventoryTask task
+              set task.status = :inProgress,
+                  task.startDate = coalesce(task.startDate, :startDate)
+            where task.id = :taskId
+              and task.status = :readyToStart
+           """)
+    int markInProgressOnFirstScan(
+            @Param("taskId") Long taskId,
+            @Param("startDate") LocalDate startDate,
+            @Param("readyToStart") InventoryTaskStatus readyToStart,
+            @Param("inProgress") InventoryTaskStatus inProgress
+    );
 }

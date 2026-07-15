@@ -89,6 +89,10 @@ public class SparePartInventoryItem {
     @JoinColumn(name = "counted_by_user_id")
     private User countedBy;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "current_scan_id")
+    private SparePartInventoryScan currentScan;
+
     @Column(name = "counted_at")
     private LocalDateTime countedAt;
 
@@ -135,6 +139,8 @@ public class SparePartInventoryItem {
     public void setStatus(SparePartInventoryItemStatus status) { this.status = status; }
     public User getCountedBy() { return countedBy; }
     public void setCountedBy(User countedBy) { this.countedBy = countedBy; }
+    public SparePartInventoryScan getCurrentScan() { return currentScan; }
+    public void setCurrentScan(SparePartInventoryScan currentScan) { this.currentScan = currentScan; }
     public LocalDateTime getCountedAt() { return countedAt; }
     public void setCountedAt(LocalDateTime countedAt) { this.countedAt = countedAt; }
     public String getNotes() { return notes; }

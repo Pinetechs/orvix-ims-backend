@@ -99,6 +99,10 @@ public class VehicleInventoryItem {
     @JoinColumn(name = "checked_by_user_id")
     private User checkedBy;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "current_scan_id")
+    private VehicleInventoryScan currentScan;
+
     @Column(name = "checked_at")
     private LocalDateTime checkedAt;
 
@@ -181,6 +185,8 @@ public class VehicleInventoryItem {
 
     public User getCheckedBy() { return checkedBy; }
     public void setCheckedBy(User checkedBy) { this.checkedBy = checkedBy; }
+    public VehicleInventoryScan getCurrentScan() { return currentScan; }
+    public void setCurrentScan(VehicleInventoryScan currentScan) { this.currentScan = currentScan; }
 
     public LocalDateTime getCheckedAt() { return checkedAt; }
     public void setCheckedAt(LocalDateTime checkedAt) { this.checkedAt = checkedAt; }

@@ -25,4 +25,17 @@ public interface AssetInventoryLocationRepository extends JpaRepository<AssetInv
            where location.inventoryTask.id = :taskId
            """)
     int deleteByTaskId(@Param("taskId") Long taskId);
+
+    @Modifying(flushAutomatically = true)
+    @Query("""
+           update AssetInventoryLocation location
+              set location.processedAssets = location.processedAssets + :processedDelta,
+                  location.matchedAssets = location.matchedAssets + :matchedDelta
+            where location.id = :locationId
+           """)
+    int adjustScanCounters(
+            @Param("locationId") Long locationId,
+            @Param("processedDelta") int processedDelta,
+            @Param("matchedDelta") int matchedDelta
+    );
 }

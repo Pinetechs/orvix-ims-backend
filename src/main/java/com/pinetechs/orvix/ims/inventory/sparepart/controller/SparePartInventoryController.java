@@ -112,11 +112,15 @@ public class SparePartInventoryController {
     }
 
     @PostMapping("/{taskId}/scan")
+    @Deprecated
     public SparePartInventoryScanResponse scan(
             @PathVariable Long taskId,
             @RequestBody SparePartInventoryScanRequest request,
             Authentication authentication
     ) {
-        return scanService.scan(taskId, request, helper.currentUser(authentication));
+        throw new com.pinetechs.orvix.ims.common.exception.BusinessException(
+                org.springframework.http.HttpStatus.GONE,
+                "Legacy scan endpoint was retired; use /api/app/v1/tasks/{taskId}/scans"
+        );
     }
 }

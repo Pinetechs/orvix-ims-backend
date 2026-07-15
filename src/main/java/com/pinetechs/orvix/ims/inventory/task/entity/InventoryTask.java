@@ -61,11 +61,16 @@ public class InventoryTask {
     @Column(name = "matched_records", nullable = false)
     private Integer matchedRecords = 0;
 
+    @Column(name = "scan_image_required", nullable = false, columnDefinition = "BOOLEAN DEFAULT TRUE")
+    private boolean scanImageRequired = true;
+
+
     @Column(name = "start_date")
     private LocalDate startDate;
 
     @Column(name = "paused_at")
     private LocalDateTime pausedAt;
+
 
     @Column(name = "pause_reason", length = 500)
     private String pauseReason;
@@ -91,6 +96,7 @@ public class InventoryTask {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
 
     @UpdateTimestamp
     @Column(name = "updated_at")
@@ -168,6 +174,13 @@ public class InventoryTask {
         this.assignments = assignments;
     }
 
+    public boolean isScanImageRequired() {
+        return scanImageRequired;
+    }
+
+    public void setScanImageRequired(boolean scanImageRequired) {
+        this.scanImageRequired = scanImageRequired;
+    }
 
     @Transient
     public double getProgressPercentage() {

@@ -25,4 +25,23 @@ public interface SparePartInventoryLocationRepository extends JpaRepository<Spar
            where location.inventoryTask.id = :taskId
            """)
     int deleteByTaskId(@Param("taskId") Long taskId);
+
+    @Modifying(flushAutomatically = true)
+    @Query("""
+           update SparePartInventoryLocation location
+              set location.countedItems = location.countedItems + :countedDelta,
+                  location.matchedItems = location.matchedItems + :matchedDelta,
+                  location.shortageItems = location.shortageItems + :shortageDelta,
+                  location.overageItems = location.overageItems + :overageDelta,
+                  location.locationMismatchItems = location.locationMismatchItems + :locationMismatchDelta
+            where location.id = :locationId
+           """)
+    int adjustScanCounters(
+            @Param("locationId") Long locationId,
+            @Param("countedDelta") int countedDelta,
+            @Param("matchedDelta") int matchedDelta,
+            @Param("shortageDelta") int shortageDelta,
+            @Param("overageDelta") int overageDelta,
+            @Param("locationMismatchDelta") int locationMismatchDelta
+    );
 }

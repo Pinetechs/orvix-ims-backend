@@ -1,5 +1,8 @@
 package com.pinetechs.orvix.ims.file.entity;
 
+import com.pinetechs.orvix.ims.file.enums.UploadedFileType;
+import com.pinetechs.orvix.ims.file.enums.UploadedFileVisibility;
+import com.pinetechs.orvix.ims.user.entity.User;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -41,6 +44,21 @@ public class UploadedFile {
     @Column(name = "upload_folder_name", length = 200)
     private String uploadFolderName;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "visibility", nullable = false, length = 20)
+    private UploadedFileVisibility visibility = UploadedFileVisibility.PRIVATE;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "file_type", nullable = false, length = 30)
+    private UploadedFileType fileType = UploadedFileType.GENERIC;
+
+    @Column(name = "checksum_sha256", length = 64)
+    private String checksumSha256;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "uploaded_by_user_id")
+    private User uploadedBy;
+
     @Column(name = "is_deleted", nullable = false)
     private Boolean deleted = false;
 
@@ -58,6 +76,8 @@ public class UploadedFile {
     public void prePersist() {
         if (deleted == null) deleted = false;
         if (temp == null) temp = true;
+        if (visibility == null) visibility = UploadedFileVisibility.PRIVATE;
+        if (fileType == null) fileType = UploadedFileType.GENERIC;
     }
 
     public Long getId() { return id; }
@@ -97,4 +117,16 @@ public class UploadedFile {
     public void setDeletedAt(LocalDateTime deletedAt) { this.deletedAt = deletedAt; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
+
+    public UploadedFileVisibility getVisibility() { return visibility; }
+    public void setVisibility(UploadedFileVisibility visibility) { this.visibility = visibility; }
+
+    public UploadedFileType getFileType() { return fileType; }
+    public void setFileType(UploadedFileType fileType) { this.fileType = fileType; }
+
+    public String getChecksumSha256() { return checksumSha256; }
+    public void setChecksumSha256(String checksumSha256) { this.checksumSha256 = checksumSha256; }
+
+    public User getUploadedBy() { return uploadedBy; }
+    public void setUploadedBy(User uploadedBy) { this.uploadedBy = uploadedBy; }
 }

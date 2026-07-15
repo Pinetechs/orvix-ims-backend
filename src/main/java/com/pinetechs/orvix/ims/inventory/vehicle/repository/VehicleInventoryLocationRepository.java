@@ -33,4 +33,17 @@ public interface VehicleInventoryLocationRepository
            """)
     int deleteByTaskId(@Param("taskId") Long taskId);
 
-}
+    @Modifying(flushAutomatically = true)
+    @Query("""
+           update VehicleInventoryLocation location
+              set location.processedVehicles = location.processedVehicles + :processedDelta,
+                  location.matchedVehicles = location.matchedVehicles + :matchedDelta
+            where location.id = :locationId
+           """)
+    int adjustScanCounters(
+            @Param("locationId") Long locationId,
+            @Param("processedDelta") int processedDelta,
+            @Param("matchedDelta") int matchedDelta
+    );
+
+} 

@@ -53,7 +53,7 @@ public class GlobalExceptionHandler {
         List<String> errors = new ArrayList<>();
         String message = errors.isEmpty() ? "Access denied" : String.join(", ", errors);
         return ResponseEntity
-                .status(HttpStatus.UNAUTHORIZED)
+                .status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.failed(message));
     }
 

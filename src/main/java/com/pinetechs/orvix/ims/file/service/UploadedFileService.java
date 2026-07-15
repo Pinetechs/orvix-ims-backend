@@ -1,12 +1,18 @@
 package com.pinetechs.orvix.ims.file.service;
 
 import com.pinetechs.orvix.ims.config.Config;
+import com.pinetechs.orvix.ims.common.exception.BusinessException;
 import com.pinetechs.orvix.ims.config.Property;
 import com.pinetechs.orvix.ims.config.WebMvcConfig;
 import com.pinetechs.orvix.ims.file.entity.UploadedFile;
+import com.pinetechs.orvix.ims.file.enums.UploadedFileType;
+import com.pinetechs.orvix.ims.file.enums.UploadedFileVisibility;
 import com.pinetechs.orvix.ims.file.repository.UploadedFileRepository;
+import com.pinetechs.orvix.ims.user.entity.User;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -15,6 +21,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.io.InputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -24,6 +33,9 @@ import java.util.UUID;
 @Service
 @Transactional
 public class UploadedFileService {
+
+    private static final long MAX_SCAN_IMAGE_BYTES = 2L * 1024L * 1024L;
+    private static final Set<String> SCAN_IMAGE_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp");
 
     private final UploadedFileRepository uploadedFileRepository;
     private final Config config;
@@ -40,7 +52,32 @@ public class UploadedFileService {
             boolean publicFile
     ) throws IOException {
         validateAllowedExtensions(multipartFile, Set.of("xls", "xlsx"));
-        return upload(multipartFile, folderName, temp, publicFile);
+        UploadedFile uploadedFile = upload(multipartFile, folderName, temp, publicFile);
+        uploadedFile.setFileType(UploadedFileType.IMPORT_EXCEL);
+        return uploadedFileRepository.save(uploadedFile);
+    }
+
+    /**
+     * Persists scan evidence in a separate transaction. If the scan transaction
+     * fails, the file remains temporary and is removed later by the cleanup job.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public UploadedFile uploadPrivateScanImage(
+            MultipartFile multipartFile,
+            String folderName,
+            User uploadedBy
+    ) throws IOException {
+        validateScanImage(multipartFile);
+        UploadedFile uploadedFile = upload(multipartFile, folderName, true, false);
+        try {
+            uploadedFile.setFileType(UploadedFileType.SCAN_IMAGE);
+            uploadedFile.setVisibility(UploadedFileVisibility.PRIVATE);
+            uploadedFile.setUploadedBy(uploadedBy);
+            return uploadedFileRepository.save(uploadedFile);
+        } catch (RuntimeException ex) {
+            Files.deleteIfExists(Path.of(uploadedFile.getFilePath()));
+            throw ex;
+        }
     }
 
     public UploadedFile upload(
@@ -102,8 +139,18 @@ public class UploadedFileService {
         uploadedFile.setUploadFolderName(safeFolder);
         uploadedFile.setTemp(temp);
         uploadedFile.setDeleted(false);
+        uploadedFile.setVisibility(publicFile
+                ? UploadedFileVisibility.PUBLIC
+                : UploadedFileVisibility.PRIVATE);
+        uploadedFile.setFileType(UploadedFileType.GENERIC);
+        uploadedFile.setChecksumSha256(sha256(targetPath));
 
-        return uploadedFileRepository.save(uploadedFile);
+        try {
+            return uploadedFileRepository.save(uploadedFile);
+        } catch (RuntimeException ex) {
+            Files.deleteIfExists(targetPath);
+            throw ex;
+        }
     }
 
     @Transactional(readOnly = true)
@@ -123,6 +170,13 @@ public class UploadedFileService {
         });
     }
 
+    public UploadedFile markAsAttached(Long uploadedFileId) {
+        UploadedFile file = uploadedFileRepository.findByIdAndDeletedFalse(uploadedFileId)
+                .orElseThrow(() -> new IllegalArgumentException("Uploaded file not found"));
+        file.setTemp(false);
+        return uploadedFileRepository.save(file);
+    }
+
     public boolean deletePhysicalFile(Long uploadedFileId) throws IOException {
         if (uploadedFileId == null) {
             return false;
@@ -132,6 +186,10 @@ public class UploadedFileService {
 
         if (file == null) {
             return false;
+        }
+
+        if (!Boolean.TRUE.equals(file.getTemp()) && !Boolean.TRUE.equals(file.getDeleted())) {
+            throw new IllegalStateException("Attached active file must be marked as deleted before physical deletion");
         }
 
         boolean deletedFromDisk = false;
@@ -174,6 +232,74 @@ public class UploadedFileService {
 
         if (extension.isBlank() || !allowedExtensions.contains(extension)) {
             throw new IllegalArgumentException("Only Excel files are allowed: .xls, .xlsx");
+        }
+    }
+
+    private void validateScanImage(MultipartFile file) throws IOException {
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Scan image is required");
+        }
+        if (file.getSize() > MAX_SCAN_IMAGE_BYTES) {
+            throw new BusinessException(HttpStatus.PAYLOAD_TOO_LARGE, "Scan image exceeds the 2 MB limit");
+        }
+
+        String originalName = file.getOriginalFilename();
+        String extension = extractExtension(originalName == null ? "" : originalName)
+                .replace(".", "")
+                .toLowerCase(Locale.ROOT);
+        if (!SCAN_IMAGE_EXTENSIONS.contains(extension)) {
+            throw new BusinessException(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                    "Only JPEG, PNG and WebP scan images are allowed");
+        }
+
+        byte[] header = new byte[12];
+        int read;
+        try (InputStream input = file.getInputStream()) {
+            read = input.readNBytes(header, 0, header.length);
+        }
+        String detected = detectImageType(header, read);
+        boolean extensionMatches = ("jpeg".equals(detected) && ("jpg".equals(extension) || "jpeg".equals(extension)))
+                || detected.equals(extension);
+        if (detected.isEmpty() || !extensionMatches) {
+            throw new BusinessException(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                    "Scan image content does not match its file extension");
+        }
+    }
+
+    private String detectImageType(byte[] header, int length) {
+        if (length >= 3 && (header[0] & 0xff) == 0xff && (header[1] & 0xff) == 0xd8 && (header[2] & 0xff) == 0xff) {
+            return "jpeg";
+        }
+        if (length >= 8
+                && (header[0] & 0xff) == 0x89 && header[1] == 'P' && header[2] == 'N' && header[3] == 'G'
+                && (header[4] & 0xff) == 0x0d && (header[5] & 0xff) == 0x0a
+                && (header[6] & 0xff) == 0x1a && (header[7] & 0xff) == 0x0a) {
+            return "png";
+        }
+        if (length >= 12 && header[0] == 'R' && header[1] == 'I' && header[2] == 'F' && header[3] == 'F'
+                && header[8] == 'W' && header[9] == 'E' && header[10] == 'B' && header[11] == 'P') {
+            return "webp";
+        }
+        return "";
+    }
+
+    private String sha256(Path path) throws IOException {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (InputStream input = Files.newInputStream(path)) {
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = input.read(buffer)) >= 0) {
+                    digest.update(buffer, 0, read);
+                }
+            }
+            StringBuilder hex = new StringBuilder(64);
+            for (byte value : digest.digest()) {
+                hex.append(String.format("%02x", value & 0xff));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 is not available", ex);
         }
     }
 

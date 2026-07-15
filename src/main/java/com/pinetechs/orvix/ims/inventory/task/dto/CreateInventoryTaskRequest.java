@@ -9,6 +9,7 @@ public class CreateInventoryTaskRequest {
     private String taskName;
     private String description;
     private String inventoryDomain;
+    private Boolean scanImageRequired = true;
 
 
     public Long getCompanyId() {return companyId;}
@@ -43,4 +44,10 @@ public class CreateInventoryTaskRequest {
     }
 
     public void setNotes(String notes) {this.notes = notes;}
+
+    public Boolean getScanImageRequired() { return scanImageRequired; }
+
+    public void setScanImageRequired(Boolean scanImageRequired) {
+        this.scanImageRequired = scanImageRequired;
+    }
 }

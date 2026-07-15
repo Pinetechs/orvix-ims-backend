@@ -8,6 +8,8 @@ import org.springframework.data.domain.Range;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
@@ -21,6 +23,20 @@ public interface VehicleInventoryItemRepository
     Optional<VehicleInventoryItem> findByInventoryTaskIdAndVinNo(
             Long taskId,
             String vinNo
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select item from VehicleInventoryItem item where item.inventoryTask.id = :taskId and upper(item.vinNo) = upper(:vinNo)")
+    Optional<VehicleInventoryItem> findForUpdateByTaskIdAndVinNo(
+            @Param("taskId") Long taskId,
+            @Param("vinNo") String vinNo
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select item from VehicleInventoryItem item where item.id = :itemId and item.inventoryTask.id = :taskId")
+    Optional<VehicleInventoryItem> findForUpdateByTaskIdAndId(
+            @Param("taskId") Long taskId,
+            @Param("itemId") Long itemId
     );
 
 

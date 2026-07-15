@@ -98,4 +98,19 @@ public interface VehicleInventoryLocationAssignmentRepository extends JpaReposit
             @Param("userId") Long userId,
             Pageable pageable
     );
+
+    @Query("""
+           select case when count(locationAssignment.id) > 0 then true else false end
+           from VehicleInventoryLocationAssignment locationAssignment
+           where locationAssignment.assignment.inventoryTask.id = :taskId
+             and locationAssignment.assignment.user.id = :userId
+             and locationAssignment.location.id = :locationId
+             and locationAssignment.active = true
+             and locationAssignment.assignment.active = true
+           """)
+    boolean existsActiveByTaskIdAndUserIdAndLocationId(
+            @Param("taskId") Long taskId,
+            @Param("userId") Long userId,
+            @Param("locationId") Long locationId
+    );
 }

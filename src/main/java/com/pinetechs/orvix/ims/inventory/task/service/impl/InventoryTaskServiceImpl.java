@@ -75,6 +75,7 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
         task.setStatus(InventoryTaskStatus.CREATED);
         task.setTaskName(createInventoryTaskRequest.getTaskName());
         task.setDescription(createInventoryTaskRequest.getDescription());
+        task.setScanImageRequired(!Boolean.FALSE.equals(createInventoryTaskRequest.getScanImageRequired()));
         return inventoryTaskRepository.save(task);
     }
 
