@@ -6,7 +6,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.repository.query.Param;
+import jakarta.persistence.LockModeType;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -51,4 +53,8 @@ public interface BackgroundJobRepository extends JpaRepository<BackgroundJob, Lo
     );
 
     List<BackgroundJob> findByIdInAndStatus(List<Long> ids, JobStatus status);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select job from BackgroundJob job where job.relatedId = :relatedId")
+    List<BackgroundJob> findByRelatedIdForUpdate(@Param("relatedId") Long relatedId);
 }

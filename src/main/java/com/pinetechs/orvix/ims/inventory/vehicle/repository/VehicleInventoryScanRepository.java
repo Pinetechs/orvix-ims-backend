@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
+import java.util.List;
 
 public interface VehicleInventoryScanRepository extends JpaRepository<VehicleInventoryScan, Long> {
 
@@ -15,6 +16,9 @@ public interface VehicleInventoryScanRepository extends JpaRepository<VehicleInv
     Optional<VehicleInventoryScan> findByIdAndInventoryTaskId(Long scanId, Long taskId);
 
     long countByInventoryTaskId(Long taskId);
+
+    @Query("select distinct scan.scanImage.id from VehicleInventoryScan scan where scan.inventoryTask.id = :taskId and scan.scanImage is not null")
+    List<Long> findScanImageIdsByTaskId(@Param("taskId") Long taskId);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("delete from VehicleInventoryScan scan where scan.inventoryTask.id = :taskId")

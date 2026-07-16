@@ -11,11 +11,7 @@ import com.pinetechs.orvix.ims.common.service.Helper;
 import com.pinetechs.orvix.ims.user.entity.User;
 import org.springframework.data.domain.Slice;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
@@ -37,20 +33,43 @@ public class AppTaskController {
 
     @GetMapping("/{taskId}/work-areas/{locationId}/floors")
     public List<AppHierarchyOptionResponse> getAssetFloors(
-            @PathVariable Long taskId, @PathVariable Long locationId, Authentication authentication) {
-        return appHierarchyService.assetFloors(taskId, locationId, currentUser(authentication));
+            @PathVariable Long taskId,
+            @PathVariable Long locationId,
+            @RequestParam(required = false) String search,
+            Authentication authentication) {
+        return appHierarchyService.assetFloors(
+                taskId, locationId, search, currentUser(authentication));
     }
 
     @GetMapping("/{taskId}/floors/{floorId}/places")
     public List<AppHierarchyOptionResponse> getAssetPlaces(
-            @PathVariable Long taskId, @PathVariable Long floorId, Authentication authentication) {
-        return appHierarchyService.assetPlaces(taskId, floorId, currentUser(authentication));
+            @PathVariable Long taskId,
+            @PathVariable Long floorId,
+            @RequestParam(required = false) String search,
+            Authentication authentication) {
+        return appHierarchyService.assetPlaces(
+                taskId, floorId, search, currentUser(authentication));
     }
 
     @GetMapping("/{taskId}/work-areas/{branchId}/locations")
     public List<AppHierarchyOptionResponse> getSparePartLocations(
-            @PathVariable Long taskId, @PathVariable Long branchId, Authentication authentication) {
-        return appHierarchyService.sparePartLocations(taskId, branchId, currentUser(authentication));
+            @PathVariable Long taskId,
+            @PathVariable Long branchId,
+            @RequestParam(required = false) String search,
+            Authentication authentication) {
+        return appHierarchyService.sparePartLocations(
+                taskId, branchId, search, currentUser(authentication));
+    }
+
+    @PostMapping("/{taskId}/work-areas/{branchId}/locations/{locationId}/complete")
+    public AppHierarchyOptionResponse completeSparePartLocation(
+            @PathVariable Long taskId,
+            @PathVariable Long branchId,
+            @PathVariable Long locationId,
+            Authentication authentication
+    ) {
+        return appHierarchyService.completeSparePartLocation(
+                taskId, branchId, locationId, currentUser(authentication));
     }
 
     @GetMapping

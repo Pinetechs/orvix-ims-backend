@@ -177,6 +177,23 @@ public class UploadedFileService {
         return uploadedFileRepository.save(file);
     }
 
+    /**
+     * Detaches an unused file and returns it to the temporary-file cleanup flow.
+     * The database row remains available until the scheduled cleanup removes the
+     * physical file, which also makes task deletion transaction-safe.
+     */
+    public void markForCleanup(Long uploadedFileId) {
+        if (uploadedFileId == null) {
+            return;
+        }
+        uploadedFileRepository.findById(uploadedFileId).ifPresent(file -> {
+            if (!Boolean.TRUE.equals(file.getDeleted())) {
+                file.setTemp(true);
+                uploadedFileRepository.save(file);
+            }
+        });
+    }
+
     public boolean deletePhysicalFile(Long uploadedFileId) throws IOException {
         if (uploadedFileId == null) {
             return false;

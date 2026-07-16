@@ -4,6 +4,7 @@ import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryTaskStatus;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTaskAssignment;
+import com.pinetechs.orvix.ims.inventory.sparepart.enums.SparePartLocationProgressMode;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -26,6 +27,7 @@ public class AppTaskSummaryResponse {
     private Integer progress;
     private LocalDateTime assignedAt;
     private boolean scanImageRequired;
+    private SparePartLocationProgressMode sparePartLocationProgressMode;
 
     public static AppTaskSummaryResponse from(InventoryTaskAssignment assignment) {
         InventoryTask task = assignment.getInventoryTask();
@@ -39,6 +41,7 @@ public class AppTaskSummaryResponse {
         response.status = task.getStatus();
         response.startDate = task.getStartDate();
         response.scanImageRequired = task.isScanImageRequired();
+        response.sparePartLocationProgressMode = task.getSparePartLocationProgressMode();
         response.totalRecords = valueOrZero(task.getTotalRecords());
         response.processedRecords = valueOrZero(task.getProcessedRecords());
              response.progress = (int) Math.round(task.getProgressPercentage());
@@ -71,6 +74,10 @@ public class AppTaskSummaryResponse {
 
     public boolean isScanImageRequired() {
         return scanImageRequired;
+    }
+
+    public SparePartLocationProgressMode getSparePartLocationProgressMode() {
+        return sparePartLocationProgressMode;
     }
 
     public Integer getProgress() { return progress; }

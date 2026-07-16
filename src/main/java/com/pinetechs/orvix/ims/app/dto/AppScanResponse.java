@@ -20,6 +20,8 @@ public class AppScanResponse {
     private boolean idempotentReplay;
     private LocalDateTime serverScannedAt;
     private List<String> mismatchFields = new ArrayList<>();
+    private AppScanItemSummaryResponse item;
+    private AppScanLocationSummaryResponse actualLocation;
 
     public Long getScanId() { return scanId; }
     public void setScanId(Long scanId) { this.scanId = scanId; }
@@ -51,4 +53,8 @@ public class AppScanResponse {
     public void setMismatchFields(List<String> mismatchFields) {
         this.mismatchFields = mismatchFields == null ? new ArrayList<>() : new ArrayList<>(mismatchFields);
     }
+    public AppScanItemSummaryResponse getItem() { return item; }
+    public void setItem(AppScanItemSummaryResponse item) { this.item = item; }
+    public AppScanLocationSummaryResponse getActualLocation() { return actualLocation; }
+    public void setActualLocation(AppScanLocationSummaryResponse actualLocation) { this.actualLocation = actualLocation; }
 }

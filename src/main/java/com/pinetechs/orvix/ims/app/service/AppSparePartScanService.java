@@ -1,6 +1,8 @@
 package com.pinetechs.orvix.ims.app.service;
 
 import com.pinetechs.orvix.ims.app.dto.AppScanCorrectionRequest;
+import com.pinetechs.orvix.ims.app.dto.AppScanItemSummaryResponse;
+import com.pinetechs.orvix.ims.app.dto.AppScanLocationSummaryResponse;
 import com.pinetechs.orvix.ims.app.dto.AppScanRequest;
 import com.pinetechs.orvix.ims.app.dto.AppScanResponse;
 import com.pinetechs.orvix.ims.common.exception.BusinessException;
@@ -64,25 +66,21 @@ public class AppSparePartScanService {
     }
 
     @Transactional
-    public AppScanResponse scan(Long taskId, AppScanRequest request, User user,
-                                UploadedFile image, String payloadHash) {
+    public AppScanResponse scan(Long taskId, AppScanRequest request, User user, UploadedFile image, String payloadHash) {
         InventoryTask task = support.requireAssignedScannableTask(taskId, user, InventoryDomain.SPARE_PART);
         support.requireQuantityPermission(user);
         String itemNo = support.requireCode(request.getCode());
         BigDecimal countedQty = requireQuantity(request.getCountedQty());
         SparePath actual = requireAssignedPath(taskId, request.getBranchId(), request.getLocationId(), user);
 
-        SparePartInventoryItem item = itemRepository
-                .findExactForUpdate(taskId, itemNo, actual.branch().getId(), actual.location().getId())
-                .orElse(null);
+        SparePartInventoryItem item = itemRepository.findExactForUpdate(taskId, itemNo, actual.branch().getId(), actual.location().getId()).orElse(null);
         List<SparePartInventoryItem> candidates = List.of();
         if (item == null) {
             candidates = itemRepository.findCandidatesForUpdate(taskId, itemNo);
             if (candidates.size() == 1) item = candidates.get(0);
         }
 
-        SparePartInventoryScan scan = baseScan(task, item, user, itemNo, request, attach(image), payloadHash,
-                actual, countedQty);
+        SparePartInventoryScan scan = baseScan(task, item, user, itemNo, request, attach(image), payloadHash, actual, countedQty);
         if (item == null) {
             boolean ambiguous = candidates.size() > 1;
             scan.setEventType(ambiguous ? InventoryScanEventType.AMBIGUOUS : InventoryScanEventType.EXTRA);
@@ -92,7 +90,9 @@ public class AppSparePartScanService {
                     : SparePartInventoryLocationStatus.EXTRA_ITEM);
             scan.setQuantityStatus(SparePartInventoryQuantityStatus.NOT_APPLICABLE);
             scan.setMessage(ambiguous ? "AMBIGUOUS_ITEM_NUMBER" : "ITEM_NOT_IN_TASK");
+            scan.setReviewRequired(true);
             scan = scanRepository.saveAndFlush(scan);
+            reopenLocation(taskId, actual.location());
             startTask(taskId);
             return response(scan, null, "REVIEW", "scan.recorded_for_review", true, false);
         }
@@ -110,16 +110,20 @@ public class AppSparePartScanService {
                         : SparePartInventoryScanResult.RECOUNT_DIFFERENT_QUANTITY);
             applyInternalOutcome(scan, item, outcome);
             scan.setMessage(duplicate ? "RECOUNT_DUPLICATE" : "RECOUNT_REQUIRES_CORRECTION");
+            scan.setReviewRequired(!duplicate);
             scan = scanRepository.saveAndFlush(scan);
+            reopenLocation(taskId, actual.location());
             return response(scan, item, "ALREADY_COUNTED", "scan.already_counted", true, true);
         }
 
         scan.setEventType(InventoryScanEventType.FIRST_SCAN);
         applyInternalOutcome(scan, item, outcome);
+        scan.setReviewRequired(outcome.itemStatus() != SparePartInventoryItemStatus.MATCHED);
         scan = scanRepository.saveAndFlush(scan);
         applyCanonicalItem(item, actual, countedQty, outcome, user, scan);
         itemRepository.save(item);
         adjustCounters(item, null, outcome, 1);
+        reopenLocation(taskId, actual.location());
         startTask(taskId);
         return response(scan, item, "RECORDED", "scan.recorded", true, outcome.locationMismatch());
     }
@@ -156,11 +160,15 @@ public class AppSparePartScanService {
         applyInternalOutcome(correction, item, corrected);
         correction.setScanResult(SparePartInventoryScanResult.CORRECTED);
         correction.setMessage("CORRECTION_RECORDED");
+        correction.setReviewRequired(corrected.itemStatus() != SparePartInventoryItemStatus.MATCHED);
+        scanRepository.resolveOpenItemReviews(
+                taskId, item.getId(), LocalDateTime.now(), user);
         correction = scanRepository.saveAndFlush(correction);
 
         applyCanonicalItem(item, actual, countedQty, corrected, user, correction);
         itemRepository.save(item);
         adjustCounters(item, previous, corrected, 0);
+        reopenLocation(taskId, actual.location());
         return response(correction, item, "CORRECTED", "scan.correction_recorded", true, false);
     }
 
@@ -174,9 +182,8 @@ public class AppSparePartScanService {
         if (!assignmentRepository.existsActiveByTaskIdAndUserIdAndBranchId(taskId, user.getId(), branchId)) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "Spare part branch is not assigned to the current user");
         }
-        SparePartInventoryLocation location = locationRepository.findById(locationId)
-                .filter(value -> taskId.equals(value.getInventoryTask().getId())
-                        && branchId.equals(value.getBranch().getId()))
+        SparePartInventoryLocation location = locationRepository
+                .findForUpdate(taskId, branchId, locationId)
                 .orElseThrow(() -> new BusinessException(HttpStatus.BAD_REQUEST, "Spare part location does not belong to the selected branch"));
         return new SparePath(branch, location);
     }
@@ -189,9 +196,10 @@ public class AppSparePartScanService {
         return quantity;
     }
 
+
+    // احتساب
     private Outcome outcome(SparePartInventoryItem item, SparePath actual, BigDecimal countedQty) {
-        boolean locationMatched = item.getPlannedBranch().getId().equals(actual.branch().getId())
-                && item.getPlannedLocation().getId().equals(actual.location().getId());
+        boolean locationMatched = item.getPlannedBranch().getId().equals(actual.branch().getId()) && item.getPlannedLocation().getId().equals(actual.location().getId());
         BigDecimal stockQty = item.getStockQty();
         if (stockQty == null) throw new BusinessException(HttpStatus.CONFLICT, "Spare part stock quantity is not configured");
         int comparison = countedQty.compareTo(stockQty);
@@ -321,6 +329,18 @@ public class AppSparePartScanService {
                 InventoryTaskStatus.READY_TO_START, InventoryTaskStatus.IN_PROGRESS);
     }
 
+    private void reopenLocation(Long taskId, SparePartInventoryLocation location) {
+        if (location == null) return;
+        SparePartInventoryLocation lockedLocation = locationRepository.findForUpdate(
+                        taskId, location.getBranch().getId(), location.getId())
+                .orElseThrow(() -> new BusinessException(
+                        HttpStatus.CONFLICT, "Spare part location changed during scan"));
+        if (!lockedLocation.isCompleted()) return;
+        lockedLocation.setCompleted(false);
+        lockedLocation.setCompletedAt(null);
+        lockedLocation.setCompletedBy(null);
+    }
+
     private AppScanResponse replayResponse(SparePartInventoryScan scan, String payloadHash) {
         if (!scan.getPayloadHash().equals(payloadHash)) {
             throw new BusinessException(HttpStatus.CONFLICT, "clientScanId was already used with different scan data");
@@ -363,7 +383,40 @@ public class AppSparePartScanService {
         response.setAccepted(accepted);
         response.setCorrectionAllowed(correctionAllowed);
         response.setServerScannedAt(scan.getScannedAt());
+        response.setItem(itemSummary(scan, item));
+        response.setActualLocation(actualLocationSummary(scan));
         return response;
+    }
+
+    private AppScanItemSummaryResponse itemSummary(
+            SparePartInventoryScan scan,
+            SparePartInventoryItem item
+    ) {
+        AppScanItemSummaryResponse summary = new AppScanItemSummaryResponse();
+        String itemNo = item == null ? scan.getScannedItemNo() : item.getItemNo();
+        summary.setCode(itemNo);
+        summary.setBarcode(itemNo);
+        summary.setDisplayName(item == null || item.getBrandName() == null
+                ? itemNo
+                : item.getBrandName() + " " + itemNo);
+        summary.setCategory("SPARE_PART");
+        summary.setBrand(item == null ? null : item.getBrandName());
+        summary.setCountedQuantity(scan.getCountedQty());
+        return summary;
+    }
+
+    private AppScanLocationSummaryResponse actualLocationSummary(SparePartInventoryScan scan) {
+        AppScanLocationSummaryResponse summary = new AppScanLocationSummaryResponse();
+        if (scan.getActualBranch() != null) {
+            summary.setBranchId(scan.getActualBranch().getId());
+            summary.setBranchName(scan.getActualBranch().getBranchName());
+        }
+        if (scan.getActualLocation() != null) {
+            summary.setLocationId(scan.getActualLocation().getId());
+            summary.setLocationCode(scan.getActualLocation().getLocationCode());
+            summary.setLocationName(scan.getActualLocation().getLocationCode());
+        }
+        return summary;
     }
 
     private AppScanRequest correctionAsScanRequest(AppScanCorrectionRequest correction, String code) {

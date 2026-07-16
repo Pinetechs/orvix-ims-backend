@@ -6,17 +6,25 @@ import com.pinetechs.orvix.ims.company.repository.CompanyRepository;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryTaskStatus;
 import com.pinetechs.orvix.ims.inventory.task.dto.CreateInventoryTaskRequest;
-import com.pinetechs.orvix.ims.inventory.task.dto.TaskResponse;
+import com.pinetechs.orvix.ims.inventory.sparepart.enums.SparePartLocationProgressMode;
+import com.pinetechs.orvix.ims.inventory.task.dto.*;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskAssignmentRepository;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskRepository;
 import com.pinetechs.orvix.ims.inventory.vehicle.repository.VehicleInventoryLocationAssignmentRepository;
 import com.pinetechs.orvix.ims.inventory.vehicle.repository.VehicleInventoryLocationRepository;
+import com.pinetechs.orvix.ims.inventory.asset.repository.AssetInventoryLocationAssignmentRepository;
+import com.pinetechs.orvix.ims.inventory.asset.repository.AssetInventoryLocationRepository;
+import com.pinetechs.orvix.ims.inventory.sparepart.repository.SparePartInventoryBranchAssignmentRepository;
+import com.pinetechs.orvix.ims.inventory.sparepart.repository.SparePartInventoryBranchRepository;
 import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskService;
+import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskPurgeService;
 import com.pinetechs.orvix.ims.security.AccessPolicyService;
 import com.pinetechs.orvix.ims.user.entity.User;
 import com.pinetechs.orvix.ims.user.enums.PermissionCode;
+import com.pinetechs.orvix.ims.user.enums.UserType;
 import com.pinetechs.orvix.ims.user.repository.UserRepository;
+import com.pinetechs.orvix.ims.user.dto.UserResponse;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
@@ -43,6 +51,11 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
     private final InventoryTaskAssignmentRepository assignmentRepository;
     private final VehicleInventoryLocationRepository vehicleLocationRepository;
     private final VehicleInventoryLocationAssignmentRepository locationAssignmentRepository;
+    private final InventoryTaskPurgeService purgeService;
+    private final AssetInventoryLocationRepository assetLocationRepository;
+    private final AssetInventoryLocationAssignmentRepository assetLocationAssignmentRepository;
+    private final SparePartInventoryBranchRepository spareBranchRepository;
+    private final SparePartInventoryBranchAssignmentRepository spareBranchAssignmentRepository;
 
 
     public InventoryTaskServiceImpl(
@@ -52,7 +65,12 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
             AccessPolicyService accessPolicyService,
             InventoryTaskAssignmentRepository assignmentRepository,
             VehicleInventoryLocationRepository vehicleLocationRepository,
-            VehicleInventoryLocationAssignmentRepository locationAssignmentRepository) {
+            VehicleInventoryLocationAssignmentRepository locationAssignmentRepository,
+            AssetInventoryLocationRepository assetLocationRepository,
+            AssetInventoryLocationAssignmentRepository assetLocationAssignmentRepository,
+            SparePartInventoryBranchRepository spareBranchRepository,
+            SparePartInventoryBranchAssignmentRepository spareBranchAssignmentRepository,
+            InventoryTaskPurgeService purgeService) {
         this.inventoryTaskRepository = inventoryTaskRepository;
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
@@ -60,10 +78,15 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
         this.assignmentRepository = assignmentRepository;
         this.vehicleLocationRepository = vehicleLocationRepository;
         this.locationAssignmentRepository = locationAssignmentRepository;
+        this.assetLocationRepository = assetLocationRepository;
+        this.assetLocationAssignmentRepository = assetLocationAssignmentRepository;
+        this.spareBranchRepository = spareBranchRepository;
+        this.spareBranchAssignmentRepository = spareBranchAssignmentRepository;
+        this.purgeService = purgeService;
     }
 
     @Override
-    public InventoryTask createTask(CreateInventoryTaskRequest createInventoryTaskRequest, User currentUser) {
+    public TaskResponse createTask(CreateInventoryTaskRequest createInventoryTaskRequest, User currentUser) {
         InventoryDomain inventoryDomain =    InventoryDomain.valueOf(createInventoryTaskRequest.getInventoryDomain().toUpperCase());
         Company company = companyRepository.findById(createInventoryTaskRequest.getCompanyId()).orElseThrow(() -> new RuntimeException("Company not found"));
         accessPolicyService.assertCanCreateTask(currentUser, company.getId(), inventoryDomain);
@@ -76,7 +99,15 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
         task.setTaskName(createInventoryTaskRequest.getTaskName());
         task.setDescription(createInventoryTaskRequest.getDescription());
         task.setScanImageRequired(!Boolean.FALSE.equals(createInventoryTaskRequest.getScanImageRequired()));
-        return inventoryTaskRepository.save(task);
+        SparePartLocationProgressMode progressMode = createInventoryTaskRequest.getSparePartLocationProgressMode();
+        if (progressMode == null) progressMode = SparePartLocationProgressMode.BASIC;
+        if (inventoryDomain != InventoryDomain.SPARE_PART
+                && progressMode != SparePartLocationProgressMode.BASIC) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST,
+                    "Detailed spare-part location progress is valid only for spare-part tasks");
+        }
+        task.setSparePartLocationProgressMode(progressMode);
+        return TaskResponse.from( inventoryTaskRepository.save(task),purgeService.countScans(task));
     }
 
 
@@ -84,15 +115,9 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
 
 
     @Override
-    public InventoryTask startTask(Long taskId) {
+    public TaskResponse startTask(Long taskId, User currentUser) {
         InventoryTask task = getTask(taskId);
-
-        if (task.getStatus() == InventoryTaskStatus.PAUSED) {
-            task.setStatus(InventoryTaskStatus.IN_PROGRESS);
-            task.setPausedAt(null);
-            task.setPauseReason(null);
-            return inventoryTaskRepository.save(task);
-        }
+        assertCanUpdateTask(currentUser, task);
 
         if (task.getStatus() != InventoryTaskStatus.IMPORT_COMPLETED
                 && task.getStatus() != InventoryTaskStatus.READY_FOR_ASSIGNMENT
@@ -108,14 +133,11 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
             task.setStartDate(LocalDate.now());
         }
 
-        task.setPausedAt(null);
-        task.setPauseReason(null);
-
-        return inventoryTaskRepository.save(task);
+        return TaskResponse.from( inventoryTaskRepository.save(task),purgeService.countScans(task));
     }
 
     @Override
-    public InventoryTask markReadyToStart(Long taskId, User currentUser) {
+    public TaskResponse markReadyToStart(Long taskId, User currentUser) {
         InventoryTask task = getTask(taskId);
 
         accessPolicyService.assertCanAssignInventoryTaskUsers(
@@ -125,7 +147,7 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
         );
 
         if (task.getStatus() == InventoryTaskStatus.READY_TO_START) {
-            return task;
+            return TaskResponse.from(task,purgeService.countScans(task));
         }
 
         if (task.getStatus() != InventoryTaskStatus.IMPORT_COMPLETED
@@ -137,7 +159,7 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
         validateTaskReadyToStart(task);
 
         task.setStatus(InventoryTaskStatus.READY_TO_START);
-        return inventoryTaskRepository.save(task);
+        return TaskResponse.from( inventoryTaskRepository.save(task),purgeService.countScans(task));
     }
 
 
@@ -145,75 +167,88 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
 
 
     @Override
-    public InventoryTask pauseTask(Long taskId, String pauseReason) {
+    public TaskResponse pauseTask(Long taskId, String pauseReason, User currentUser) {
         InventoryTask task = getTask(taskId);
+        assertCanUpdateTask(currentUser, task);
 
         if (task.getStatus() != InventoryTaskStatus.IN_PROGRESS) {
-            throw new RuntimeException("Only IN_PROGRESS task can be paused");
+            throw new BusinessException(HttpStatus.CONFLICT, "Only an IN_PROGRESS task can be paused");
         }
 
         task.setStatus(InventoryTaskStatus.PAUSED);
         task.setPausedAt(LocalDateTime.now());
-        task.setPauseReason(pauseReason);
+        task.setPauseReason(requireReason(pauseReason, "Pause reason is required"));
+        task.setPausedBy(currentUser);
 
-        return inventoryTaskRepository.save(task);
+
+
+        return TaskResponse.from( inventoryTaskRepository.save(task),purgeService.countScans(task));
     }
 
     @Override
-    public InventoryTask resumeTask(Long taskId) {
+    public TaskResponse resumeTask(Long taskId, User currentUser) {
         InventoryTask task = getTask(taskId);
+        assertCanUpdateTask(currentUser, task);
 
         if (task.getStatus() != InventoryTaskStatus.PAUSED) {
-            throw new RuntimeException("Only PAUSED task can be resumed");
+            throw new BusinessException(HttpStatus.CONFLICT, "Only a PAUSED task can be resumed");
         }
 
         task.setStatus(InventoryTaskStatus.IN_PROGRESS);
-        task.setPausedAt(null);
-        task.setPauseReason(null);
 
-        return inventoryTaskRepository.save(task);
+        return TaskResponse.from( inventoryTaskRepository.save(task),purgeService.countScans(task));
     }
 
     @Override
-    public InventoryTask moveToReview(Long taskId) {
+    public TaskResponse moveToReview(Long taskId, User currentUser) {
         InventoryTask task = getTask(taskId);
+        assertCanUpdateTask(currentUser, task);
 
         if (task.getStatus() != InventoryTaskStatus.IN_PROGRESS) {
-            throw new RuntimeException("Only IN_PROGRESS task can move to review");
+            throw new BusinessException(HttpStatus.CONFLICT, "Only an IN_PROGRESS task can move to review");
         }
 
         task.setStatus(InventoryTaskStatus.UNDER_REVIEW);
 
-        return inventoryTaskRepository.save(task);
+        return TaskResponse.from( inventoryTaskRepository.save(task),purgeService.countScans(task));
     }
 
     @Override
-    public InventoryTask completeTask(Long taskId) {
+    public TaskResponse completeTask(Long taskId, User currentUser) {
         InventoryTask task = getTask(taskId);
+        assertCanUpdateTask(currentUser, task);
 
         if (task.getStatus() != InventoryTaskStatus.UNDER_REVIEW) {
-            throw new RuntimeException("Only UNDER_REVIEW task can be completed");
+            throw new BusinessException(HttpStatus.CONFLICT, "Only an UNDER_REVIEW task can be completed");
         }
 
         task.setStatus(InventoryTaskStatus.COMPLETED);
         task.setClosedAt(LocalDateTime.now());
 
-        return inventoryTaskRepository.save(task);
+        return TaskResponse.from( inventoryTaskRepository.save(task),purgeService.countScans(task));
     }
 
     @Override
-    public InventoryTask cancelTask(Long taskId, String cancelReason) {
+    public TaskResponse cancelTask(Long taskId, String cancelReason, User currentUser) {
         InventoryTask task = getTask(taskId);
+        assertCanUpdateTask(currentUser, task);
 
-        if (task.getStatus() == InventoryTaskStatus.COMPLETED) {
-            throw new RuntimeException("Completed task cannot be cancelled");
+        if (task.getStatus() == InventoryTaskStatus.COMPLETED
+                || task.getStatus() == InventoryTaskStatus.CANCELLED) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Closed task cannot be cancelled");
+        }
+        if (task.getStatus() == InventoryTaskStatus.IMPORT_PENDING
+                || task.getStatus() == InventoryTaskStatus.IMPORT_IN_PROGRESS) {
+            throw new BusinessException(HttpStatus.CONFLICT,
+                    "Task cannot be cancelled while its import job is pending or running");
         }
 
         task.setStatus(InventoryTaskStatus.CANCELLED);
         task.setClosedAt(LocalDateTime.now());
-        task.setCancelReason(cancelReason);
+        task.setCancelReason(requireReason(cancelReason, "Cancellation reason is required"));
+        task.setCancelledBy(currentUser);
 
-        return inventoryTaskRepository.save(task);
+        return TaskResponse.from( inventoryTaskRepository.save(task),purgeService.countScans(task));
     }
 
 
@@ -235,7 +270,96 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
 
         accessPolicyService.assertCanViewInventoryTask(currentUser, task);
 
-        return TaskResponse.from(task);
+        return toTaskResponse(task);
+    }
+
+    @Override
+    public TaskResponse updateSparePartLocationProgressMode(
+            Long taskId,
+            UpdateSparePartLocationProgressModeRequest request,
+            User currentUser
+    ) {
+        if (request == null || request.getMode() == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Location progress mode is required");
+        }
+        UpdateInventoryTaskScanSettingsRequest settings = new UpdateInventoryTaskScanSettingsRequest();
+        settings.setSparePartLocationProgressMode(request.getMode());
+        return updateScanSettings(taskId, settings, currentUser);
+    }
+
+    @Override
+    public TaskResponse updateScanSettings(
+            Long taskId,
+            UpdateInventoryTaskScanSettingsRequest request,
+            User currentUser
+    ) {
+        if (request == null || (request.getScanImageRequired() == null
+                && request.getSparePartLocationProgressMode() == null)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "At least one scan setting is required");
+        }
+
+        InventoryTask task = getTask(taskId);
+        assertCanUpdateTask(currentUser, task);
+        assertTaskIsOpen(task, "Scan settings cannot be changed for a closed task");
+
+        if (request.getScanImageRequired() != null) {
+            task.setScanImageRequired(request.getScanImageRequired());
+        }
+        if (request.getSparePartLocationProgressMode() != null) {
+            if (task.getInventoryDomain() != InventoryDomain.SPARE_PART) {
+                throw new BusinessException(HttpStatus.CONFLICT,
+                        "Location progress mode is valid only for spare-part tasks");
+            }
+            task.setSparePartLocationProgressMode(request.getSparePartLocationProgressMode());
+        }
+
+        return toTaskResponse(inventoryTaskRepository.save(task));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<UserResponse> getEligibleStaff(
+            Long taskId,
+            String search,
+            Pageable pageable,
+            User currentUser
+    ) {
+        InventoryTask task = getTask(taskId);
+        accessPolicyService.assertCanAssignInventoryTaskUsers(
+                currentUser, task.getCompany().getId(), task.getInventoryDomain());
+        return userRepository.findEligibleInventoryStaff(
+                task.getCompany().getId(),
+                task.getInventoryDomain(),
+                normalizeSearch(search),
+                UserType.INVENTORY_STAFF,
+                pageable
+        ).map(UserResponse::from);
+    }
+
+    @Override
+    public void deleteTask(Long taskId, User currentUser) {
+        if (taskId == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Task ID is required");
+        }
+        InventoryTask task = inventoryTaskRepository.findByIdForUpdate(taskId)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Task not found"));
+        assertCanUpdateTask(currentUser, task);
+
+        if (task.getStatus() == InventoryTaskStatus.COMPLETED
+                || task.getStatus() == InventoryTaskStatus.CANCELLED) {
+            throw new BusinessException(HttpStatus.CONFLICT, "Closed task cannot be deleted");
+        }
+        if (task.getStatus() == InventoryTaskStatus.IN_PROGRESS) {
+            throw new BusinessException(HttpStatus.CONFLICT,
+                    "Pause the task before deleting it");
+        }
+
+        long scanCount = purgeService.countScans(task);
+        if (scanCount >= InventoryTaskPurgeService.HARD_DELETE_SCAN_LIMIT) {
+            throw new BusinessException(HttpStatus.CONFLICT,
+                    "Task has 10 or more scans and must be cancelled with a reason instead of deleted");
+        }
+        purgeService.purge(task);
     }
 
 
@@ -258,7 +382,7 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
                 status
         );
 
-        return inventoryTaskRepository.findAll(specification, pageable).map(TaskResponse::from);
+        return inventoryTaskRepository.findAll(specification, pageable).map(this::toTaskResponse);
     }
 
 
@@ -383,6 +507,8 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
             if (query.getResultType() != Long.class && query.getResultType() != long.class) {
                 root.fetch("company", JoinType.LEFT);
                 root.fetch("createdBy", JoinType.LEFT);
+                root.fetch("pausedBy", JoinType.LEFT);
+                root.fetch("cancelledBy", JoinType.LEFT);
                 query.distinct(true);
             }
 
@@ -422,7 +548,7 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
 
 
     private void validateTaskReadyToStart(InventoryTask task) {
-        long assignmentCount = assignmentRepository.countByInventoryTaskId(task.getId());
+        long assignmentCount = assignmentRepository.findActiveByInventoryTaskIdWithUser(task.getId()).size();
 
         if (assignmentCount == 0) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "Assign at least one inventory staff member before starting the task");
@@ -443,12 +569,63 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
                         "All vehicle locations must be assigned before the task can be ready to start"
                 );
             }
+        } else if (task.getInventoryDomain() == InventoryDomain.ASSET) {
+            long locationCount = assetLocationRepository.countByInventoryTaskId(task.getId());
+            if (locationCount == 0) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST,
+                        "Asset task has no imported locations. Import the asset Excel file first");
+            }
+            long assignedLocationCount = assetLocationAssignmentRepository
+                    .countDistinctActiveLocationsByTaskId(task.getId());
+            if (assignedLocationCount < locationCount) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST,
+                        "All asset locations must be assigned before the task can be ready to start");
+            }
+        } else if (task.getInventoryDomain() == InventoryDomain.SPARE_PART) {
+            long branchCount = spareBranchRepository.countByInventoryTaskId(task.getId());
+            if (branchCount == 0) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST,
+                        "Spare-part task has no imported branches. Import the spare-part Excel file first");
+            }
+            long assignedBranchCount = spareBranchAssignmentRepository
+                    .countDistinctActiveBranchesByTaskId(task.getId());
+            if (assignedBranchCount < branchCount) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST,
+                        "All spare-part branches must be assigned before the task can be ready to start");
+            }
         }
     }
 
     private InventoryTask getTask(Long taskId) {
         return inventoryTaskRepository.findById(taskId)
-                .orElseThrow(() -> new RuntimeException("Inventory task not found"));
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Inventory task not found"));
+    }
+
+    private TaskResponse toTaskResponse(InventoryTask task) {
+        return TaskResponse.from(task, purgeService.countScans(task));
+    }
+
+    private void assertCanUpdateTask(User currentUser, InventoryTask task) {
+        accessPolicyService.assertCanUpdateTask(
+                currentUser, task.getCompany().getId(), task.getInventoryDomain());
+    }
+
+    private void assertTaskIsOpen(InventoryTask task, String message) {
+        if (task.getStatus() == InventoryTaskStatus.COMPLETED
+                || task.getStatus() == InventoryTaskStatus.CANCELLED) {
+            throw new BusinessException(HttpStatus.CONFLICT, message);
+        }
+    }
+
+    private String requireReason(String reason, String message) {
+        if (reason == null || reason.isBlank()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, message);
+        }
+        String normalized = reason.trim();
+        if (normalized.length() > 500) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Reason must not exceed 500 characters");
+        }
+        return normalized;
     }
     private String normalizeSearch(String search) {
         if (search == null || search.isBlank()) {

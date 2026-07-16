@@ -3,6 +3,7 @@ package com.pinetechs.orvix.ims.inventory.task.entity;
 import com.pinetechs.orvix.ims.company.entity.Company;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryTaskStatus;
+import com.pinetechs.orvix.ims.inventory.sparepart.enums.SparePartLocationProgressMode;
 import com.pinetechs.orvix.ims.user.entity.User;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -64,6 +65,10 @@ public class InventoryTask {
     @Column(name = "scan_image_required", nullable = false, columnDefinition = "BOOLEAN DEFAULT TRUE")
     private boolean scanImageRequired = true;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "spare_part_location_progress_mode", nullable = false, length = 20)
+    private SparePartLocationProgressMode sparePartLocationProgressMode = SparePartLocationProgressMode.BASIC;
+
 
     @Column(name = "start_date")
     private LocalDate startDate;
@@ -75,8 +80,16 @@ public class InventoryTask {
     @Column(name = "pause_reason", length = 500)
     private String pauseReason;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "paused_by_user_id")
+    private User pausedBy;
+
     @Column(name = "cancel_reason", length = 500)
     private String cancelReason;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cancelled_by_user_id")
+    private User cancelledBy;
 
     @Column(name = "closed_at")
     private LocalDateTime closedAt;
@@ -154,6 +167,9 @@ public class InventoryTask {
         this.pauseReason = pauseReason;
     }
 
+    public User getPausedBy() { return pausedBy; }
+    public void setPausedBy(User pausedBy) { this.pausedBy = pausedBy; }
+
     public String getCancelReason() {
         return cancelReason;
     }
@@ -161,6 +177,9 @@ public class InventoryTask {
     public void setCancelReason(String cancelReason) {
         this.cancelReason = cancelReason;
     }
+
+    public User getCancelledBy() { return cancelledBy; }
+    public void setCancelledBy(User cancelledBy) { this.cancelledBy = cancelledBy; }
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
@@ -180,6 +199,18 @@ public class InventoryTask {
 
     public void setScanImageRequired(boolean scanImageRequired) {
         this.scanImageRequired = scanImageRequired;
+    }
+
+    public SparePartLocationProgressMode getSparePartLocationProgressMode() {
+        return sparePartLocationProgressMode == null
+                ? SparePartLocationProgressMode.BASIC
+                : sparePartLocationProgressMode;
+    }
+
+    public void setSparePartLocationProgressMode(SparePartLocationProgressMode mode) {
+        this.sparePartLocationProgressMode = mode == null
+                ? SparePartLocationProgressMode.BASIC
+                : mode;
     }
 
     @Transient

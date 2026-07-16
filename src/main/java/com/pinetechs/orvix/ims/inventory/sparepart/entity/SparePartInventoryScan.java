@@ -24,6 +24,7 @@ import java.time.LocalDateTime;
                 @Index(name = "idx_sp_inv_scans_actual_branch", columnList = "actual_branch_id"),
                 @Index(name = "idx_sp_inv_scans_actual_location", columnList = "actual_location_id"),
                 @Index(name = "idx_sp_inv_scans_result", columnList = "scan_result"),
+                @Index(name = "idx_sp_inv_scans_review", columnList = "review_required, review_resolved_at"),
                 @Index(name = "idx_sp_inv_scans_client", columnList = "client_scan_id")
         },
         uniqueConstraints = @UniqueConstraint(
@@ -126,6 +127,16 @@ public class SparePartInventoryScan {
     @Column(name = "notes", length = 1000)
     private String notes;
 
+    @Column(name = "review_required", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private boolean reviewRequired;
+
+    @Column(name = "review_resolved_at")
+    private LocalDateTime reviewResolvedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "review_resolved_by_user_id")
+    private User reviewResolvedBy;
+
     @CreationTimestamp
     @Column(name = "scanned_at", nullable = false, updatable = false)
     private LocalDateTime scannedAt;
@@ -183,4 +194,10 @@ public class SparePartInventoryScan {
     public void setSymbology(String symbology) { this.symbology = symbology; }
     public InventoryScanImageSource getImageSource() { return imageSource; }
     public void setImageSource(InventoryScanImageSource imageSource) { this.imageSource = imageSource; }
+    public boolean isReviewRequired() { return reviewRequired; }
+    public void setReviewRequired(boolean reviewRequired) { this.reviewRequired = reviewRequired; }
+    public LocalDateTime getReviewResolvedAt() { return reviewResolvedAt; }
+    public void setReviewResolvedAt(LocalDateTime reviewResolvedAt) { this.reviewResolvedAt = reviewResolvedAt; }
+    public User getReviewResolvedBy() { return reviewResolvedBy; }
+    public void setReviewResolvedBy(User reviewResolvedBy) { this.reviewResolvedBy = reviewResolvedBy; }
 }

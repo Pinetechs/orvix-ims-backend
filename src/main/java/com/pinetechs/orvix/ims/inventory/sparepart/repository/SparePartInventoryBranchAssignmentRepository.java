@@ -34,6 +34,15 @@ public interface SparePartInventoryBranchAssignmentRepository extends JpaReposit
     int deleteByTaskId(@Param("taskId") Long taskId);
 
     @Query("""
+           select count(distinct branchAssignment.branch.id)
+           from SparePartInventoryBranchAssignment branchAssignment
+           where branchAssignment.assignment.inventoryTask.id = :taskId
+             and branchAssignment.active = true
+             and branchAssignment.assignment.active = true
+           """)
+    long countDistinctActiveBranchesByTaskId(@Param("taskId") Long taskId);
+
+    @Query("""
            select branchAssignment
            from SparePartInventoryBranchAssignment branchAssignment
            join fetch branchAssignment.branch

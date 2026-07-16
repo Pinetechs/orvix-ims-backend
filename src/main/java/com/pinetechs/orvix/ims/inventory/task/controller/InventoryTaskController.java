@@ -5,9 +5,13 @@ import com.pinetechs.orvix.ims.inventory.common.enums.InventoryTaskStatus;
 import com.pinetechs.orvix.ims.inventory.task.dto.CreateInventoryTaskRequest;
 import com.pinetechs.orvix.ims.inventory.task.dto.TaskResponse;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
+import com.pinetechs.orvix.ims.inventory.task.dto.UpdateSparePartLocationProgressModeRequest;
+import com.pinetechs.orvix.ims.inventory.task.dto.UpdateInventoryTaskScanSettingsRequest;
+import com.pinetechs.orvix.ims.inventory.task.dto.InventoryTaskReasonRequest;
 import com.pinetechs.orvix.ims.inventory.task.service.impl.InventoryTaskServiceImpl;
-import com.pinetechs.orvix.ims.inventory.vehicle.service.VehicleInventoryImportService;
 import com.pinetechs.orvix.ims.user.entity.User;
+import com.pinetechs.orvix.ims.user.dto.UserResponse;
+import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -20,18 +24,15 @@ import org.springframework.web.bind.annotation.*;
 public class InventoryTaskController {
 
     private final InventoryTaskServiceImpl inventoryTaskService;
-    private final VehicleInventoryImportService vehicleInventoryImportService;
     private final Helper helper ;
 
-    public InventoryTaskController(InventoryTaskServiceImpl inventoryTaskService, VehicleInventoryImportService vehicleInventoryImportService, Helper helper) {
+    public InventoryTaskController(InventoryTaskServiceImpl inventoryTaskService, Helper helper) {
         this.inventoryTaskService = inventoryTaskService;
-        this.vehicleInventoryImportService = vehicleInventoryImportService;
         this.helper = helper;
     }
 
     @PostMapping
-    public InventoryTask createTask(
-            @RequestBody CreateInventoryTaskRequest request , Authentication authentication) {
+    public TaskResponse createTask(@RequestBody CreateInventoryTaskRequest request , Authentication authentication) {
 
         return inventoryTaskService.createTask(request, helper.currentUser(authentication));
     }
@@ -42,6 +43,40 @@ public class InventoryTaskController {
     public TaskResponse getTaskById(@PathVariable Long taskId,Authentication authentication) {
         User currentUser = helper.currentUser(authentication);
         return inventoryTaskService.getTaskById(taskId ,currentUser);
+    }
+
+    @PatchMapping("/{taskId}/spare-part-location-progress-mode")
+    public TaskResponse updateSparePartLocationProgressMode(
+            @PathVariable Long taskId,
+            @RequestBody UpdateSparePartLocationProgressModeRequest request,
+            Authentication authentication
+    ) {
+        return inventoryTaskService.updateSparePartLocationProgressMode(
+                taskId, request, helper.currentUser(authentication));
+    }
+
+    @PatchMapping("/{taskId}/scan-settings")
+    public TaskResponse updateScanSettings(
+            @PathVariable Long taskId,
+            @RequestBody UpdateInventoryTaskScanSettingsRequest request,
+            Authentication authentication
+    ) {
+        return inventoryTaskService.updateScanSettings(
+                taskId, request, helper.currentUser(authentication));
+    }
+
+    @GetMapping("/{taskId}/eligible-staff")
+    public Page<UserResponse> getEligibleStaff(
+            @PathVariable Long taskId,
+            @RequestParam(name = "search", required = false) String search,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int size,
+            Authentication authentication
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("firstName").ascending()
+                .and(Sort.by("lastName").ascending()));
+        return inventoryTaskService.getEligibleStaff(
+                taskId, search, pageable, helper.currentUser(authentication));
     }
 
 
@@ -81,38 +116,54 @@ public class InventoryTaskController {
 
 
     @PostMapping("/{taskId}/ready-to-start")
-    public InventoryTask markReadyToStart(@PathVariable Long taskId, Authentication authentication) {
+    public TaskResponse markReadyToStart(@PathVariable Long taskId, Authentication authentication) {
         return inventoryTaskService.markReadyToStart(taskId, helper.currentUser(authentication));
     }
 
 
-        @PostMapping("/{taskId}/start")
-    public InventoryTask startTask(@PathVariable Long taskId) {
-        return inventoryTaskService.startTask(taskId);
+    @PostMapping("/{taskId}/start")
+    public TaskResponse startTask(@PathVariable Long taskId, Authentication authentication) {
+        return inventoryTaskService.startTask(taskId, helper.currentUser(authentication));
     }
 
     @PostMapping("/{taskId}/pause")
-    public InventoryTask pauseTask(@PathVariable Long taskId, @RequestParam(required = false) String reason) {
-        return inventoryTaskService.pauseTask(taskId, reason);
+    public TaskResponse pauseTask(@PathVariable Long taskId, @RequestBody(required = false) InventoryTaskReasonRequest request, @RequestParam(required = false) String reason,
+            Authentication authentication
+    ) {
+        String resolvedReason = request == null ? reason : request.getReason();
+        return inventoryTaskService.pauseTask(taskId, resolvedReason, helper.currentUser(authentication));
     }
 
     @PostMapping("/{taskId}/resume")
-    public InventoryTask resumeTask(@PathVariable Long taskId) {
-        return inventoryTaskService.resumeTask(taskId);
+    public TaskResponse resumeTask(@PathVariable Long taskId, Authentication authentication) {
+        return inventoryTaskService.resumeTask(taskId, helper.currentUser(authentication));
     }
 
     @PostMapping("/{taskId}/review")
-    public InventoryTask moveToReview(@PathVariable Long taskId) {
-        return inventoryTaskService.moveToReview(taskId);
+    public TaskResponse moveToReview(@PathVariable Long taskId, Authentication authentication) {
+        return inventoryTaskService.moveToReview(taskId, helper.currentUser(authentication));
     }
 
     @PostMapping("/{taskId}/complete")
-    public InventoryTask completeTask(@PathVariable Long taskId) {
-        return inventoryTaskService.completeTask(taskId);
+    public TaskResponse completeTask(@PathVariable Long taskId, Authentication authentication) {
+        return inventoryTaskService.completeTask(taskId, helper.currentUser(authentication));
     }
 
     @PostMapping("/{taskId}/cancel")
-    public InventoryTask cancelTask(@PathVariable Long taskId, @RequestParam(required = false) String reason) {
-        return inventoryTaskService.cancelTask(taskId, reason);
+    public TaskResponse cancelTask(
+            @PathVariable Long taskId,
+            @RequestBody(required = false) InventoryTaskReasonRequest request,
+            @RequestParam(required = false) String reason,
+            Authentication authentication
+    ) {
+        String resolvedReason = request == null ? reason : request.getReason();
+        return inventoryTaskService.cancelTask(
+                taskId, resolvedReason, helper.currentUser(authentication));
+    }
+
+    @DeleteMapping("/{taskId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteTask(@PathVariable Long taskId, Authentication authentication) {
+        inventoryTaskService.deleteTask(taskId, helper.currentUser(authentication));
     }
 }

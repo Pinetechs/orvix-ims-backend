@@ -93,11 +93,11 @@ public class VehicleInventoryQueryServiceImpl implements VehicleInventoryQuerySe
     @Override
     @Transactional
     public List<InventoryTaskAssignmentResponse> assignStaff(Long taskId, AssignInventoryTaskStaffLocationRequest request, User currentUser) {
-        InventoryTask task = getTask(taskId);
+        InventoryTask task = getTaskForAssignmentUpdate(taskId);
 
         validateTaskCanBeAssigned(task);
 
-        InventoryTaskStatus nextStatus = resolveAssignmentTargetStatus(request);
+        InventoryTaskStatus nextStatus = resolveAssignmentTargetStatus(task, request);
 
         accessPolicyService.assertCanAssignInventoryTaskUsers(currentUser, task.getCompany().getId(), InventoryDomain.VEHICLE);
 
@@ -114,32 +114,18 @@ public class VehicleInventoryQueryServiceImpl implements VehicleInventoryQuerySe
         Map<Long, VehicleInventoryLocation> taskLocationsById = loadTaskLocationsById(task);
         validateRequestedLocationsBelongToTask(requestedLocationIdsByUserId, taskLocationsById);
 
-        locationAssignmentRepository.deleteByTaskId(taskId);
-        assignmentRepository.deleteByInventoryTaskId(taskId);
+        List<InventoryTaskAssignment> savedAssignments = synchronizeAssignments(
+                task,
+                currentUser,
+                requestedLocationIdsByUserId,
+                staffById,
+                taskLocationsById
+        );
 
-        List<InventoryTaskAssignment> savedAssignments = new ArrayList<>();
-
-        for (Long userId : userIds) {
-            InventoryTaskAssignment assignment = new InventoryTaskAssignment();
-            assignment.setInventoryTask(task);
-            assignment.setUser(staffById.get(userId));
-            assignment.setAssignedBy(currentUser);
-            assignment.setActive(true);
-
-            InventoryTaskAssignment savedAssignment = assignmentRepository.save(assignment);
-            savedAssignments.add(savedAssignment);
-
-            for (Long locationId : requestedLocationIdsByUserId.get(userId)) {
-                VehicleInventoryLocationAssignment locationAssignment = new VehicleInventoryLocationAssignment();
-                locationAssignment.setAssignment(savedAssignment);
-                locationAssignment.setLocation(taskLocationsById.get(locationId));
-                locationAssignment.setActive(true);
-                locationAssignmentRepository.save(locationAssignment);
-            }
+        if (task.getStatus() != nextStatus) {
+            task.setStatus(nextStatus);
+            inventoryTaskRepository.save(task);
         }
-
-        task.setStatus(nextStatus);
-        inventoryTaskRepository.save(task);
 
         return savedAssignments.stream()
                 .map(assignment -> InventoryTaskAssignmentResponse.from(
@@ -161,19 +147,39 @@ public class VehicleInventoryQueryServiceImpl implements VehicleInventoryQuerySe
         return task;
     }
 
+    private InventoryTask getTaskForAssignmentUpdate(Long taskId) {
+        InventoryTask task = inventoryTaskRepository.findByIdForUpdate(taskId)
+                .orElseThrow(() -> new BusinessException(HttpStatus.BAD_REQUEST, "Inventory task not found"));
+        if (task.getInventoryDomain() != InventoryDomain.VEHICLE) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Task is not a vehicle inventory task");
+        }
+        return task;
+    }
+
     private void validateTaskCanBeAssigned(InventoryTask task) {
         if (task.getStatus() != InventoryTaskStatus.IMPORT_COMPLETED
-                && task.getStatus() != InventoryTaskStatus.READY_TO_START) {
+                && task.getStatus() != InventoryTaskStatus.READY_FOR_ASSIGNMENT
+                && task.getStatus() != InventoryTaskStatus.READY_TO_START
+                && task.getStatus() != InventoryTaskStatus.IN_PROGRESS
+                && task.getStatus() != InventoryTaskStatus.PAUSED) {
             throw new BusinessException(
-                    HttpStatus.BAD_REQUEST,
-                    "Vehicle inventory staff can be assigned only when task is IMPORT_COMPLETED or READY_TO_START"
+                    HttpStatus.CONFLICT,
+                    "Vehicle inventory assignments cannot be changed in task status " + task.getStatus()
             );
         }
     }
 
-    private InventoryTaskStatus resolveAssignmentTargetStatus(AssignInventoryTaskStaffLocationRequest request) {
+    private InventoryTaskStatus resolveAssignmentTargetStatus(
+            InventoryTask task,
+            AssignInventoryTaskStaffLocationRequest request
+    ) {
         if (request == null || request.getLocationAssignments() == null || request.getLocationAssignments().isEmpty()) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "At least one vehicle inventory staff assignment is required");
+        }
+
+        if (task.getStatus() == InventoryTaskStatus.IN_PROGRESS
+                || task.getStatus() == InventoryTaskStatus.PAUSED) {
+            return task.getStatus();
         }
 
         InventoryTaskStatus requestedStatus = request.getTaskStatus();
@@ -219,9 +225,77 @@ public class VehicleInventoryQueryServiceImpl implements VehicleInventoryQuerySe
             if (!user.hasCompany(task.getCompany().getId())) {
                 throw new BusinessException(HttpStatus.BAD_REQUEST, "User " + user.getUsername() + " is not linked to the task company");
             }
+            if (!user.hasInventoryDomain(task.getInventoryDomain())) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "User " + user.getUsername() + " is not enabled for vehicle inventory");
+            }
         }
 
         return usersById;
+    }
+
+    private List<InventoryTaskAssignment> synchronizeAssignments(
+            InventoryTask task,
+            User currentUser,
+            Map<Long, List<Long>> requestedLocationIdsByUserId,
+            Map<Long, User> staffById,
+            Map<Long, VehicleInventoryLocation> taskLocationsById
+    ) {
+        Map<Long, InventoryTaskAssignment> existingByUserId = assignmentRepository
+                .findByInventoryTaskId(task.getId())
+                .stream()
+                .collect(Collectors.toMap(assignment -> assignment.getUser().getId(), assignment -> assignment));
+
+        for (Map.Entry<Long, InventoryTaskAssignment> entry : existingByUserId.entrySet()) {
+            entry.getValue().setActive(requestedLocationIdsByUserId.containsKey(entry.getKey()));
+        }
+        assignmentRepository.saveAll(existingByUserId.values());
+
+        List<InventoryTaskAssignment> activeAssignments = new ArrayList<>();
+        for (Map.Entry<Long, List<Long>> requested : requestedLocationIdsByUserId.entrySet()) {
+            Long userId = requested.getKey();
+            InventoryTaskAssignment assignment = existingByUserId.get(userId);
+            if (assignment == null) {
+                assignment = new InventoryTaskAssignment();
+                assignment.setInventoryTask(task);
+                assignment.setUser(staffById.get(userId));
+            }
+            assignment.setAssignedBy(currentUser);
+            assignment.setActive(true);
+            assignment = assignmentRepository.save(assignment);
+            synchronizeLocationAssignments(
+                    assignment,
+                    new LinkedHashSet<>(requested.getValue()),
+                    taskLocationsById
+            );
+            activeAssignments.add(assignment);
+        }
+        return activeAssignments;
+    }
+
+    private void synchronizeLocationAssignments(
+            InventoryTaskAssignment assignment,
+            Set<Long> requestedLocationIds,
+            Map<Long, VehicleInventoryLocation> taskLocationsById
+    ) {
+        Map<Long, VehicleInventoryLocationAssignment> existingByLocationId = locationAssignmentRepository
+                .findByAssignmentId(assignment.getId())
+                .stream()
+                .collect(Collectors.toMap(value -> value.getLocation().getId(), value -> value));
+
+        for (Map.Entry<Long, VehicleInventoryLocationAssignment> entry : existingByLocationId.entrySet()) {
+            entry.getValue().setActive(requestedLocationIds.contains(entry.getKey()));
+        }
+        locationAssignmentRepository.saveAll(existingByLocationId.values());
+
+        for (Long locationId : requestedLocationIds) {
+            if (!existingByLocationId.containsKey(locationId)) {
+                VehicleInventoryLocationAssignment locationAssignment = new VehicleInventoryLocationAssignment();
+                locationAssignment.setAssignment(assignment);
+                locationAssignment.setLocation(taskLocationsById.get(locationId));
+                locationAssignment.setActive(true);
+                locationAssignmentRepository.save(locationAssignment);
+            }
+        }
     }
 
     private Map<Long, List<Long>> normalizeLocationAssignments(

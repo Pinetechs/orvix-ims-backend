@@ -5,6 +5,7 @@ import com.pinetechs.orvix.ims.company.dto.CompanyResponse;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryTaskStatus;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
+import com.pinetechs.orvix.ims.inventory.sparepart.enums.SparePartLocationProgressMode;
 import com.pinetechs.orvix.ims.user.entity.User;
 
 import java.time.LocalDateTime;
@@ -28,9 +29,19 @@ public class TaskResponse {
     private Long importJobId;
     private CompanyResponse company ;
     private boolean scanImageRequired;
+    private SparePartLocationProgressMode sparePartLocationProgressMode;
+    private long scanCount;
+    private LocalDateTime pausedAt;
+    private String pauseReason;
+    private String cancelReason;
+    private Long pausedByUserId;
+    private String pausedBy;
+    private Long cancelledByUserId;
+    private String cancelledBy;
+    private TaskAllowedActionsResponse allowedActions;
 
 
-    public static TaskResponse from(InventoryTask task) {
+    public static TaskResponse from(InventoryTask task, long scanCount) {
         TaskResponse response = new TaskResponse();
 
         response.setId(task.getId() == null ? null : task.getId().toString());
@@ -49,6 +60,16 @@ public class TaskResponse {
         response.setMismatchRecords( task.getProcessedRecords() - task.getMatchedRecords());
         response.setImportJobId(task.getImportJobId());
         response.setScanImageRequired(task.isScanImageRequired());
+        response.setSparePartLocationProgressMode(task.getSparePartLocationProgressMode());
+        response.setScanCount(scanCount);
+        response.setPausedAt(task.getPausedAt());
+        response.setPauseReason(task.getPauseReason());
+        response.setCancelReason(task.getCancelReason());
+        response.setPausedByUserId(task.getPausedBy() == null ? null : task.getPausedBy().getId());
+        response.setPausedBy(userDisplayName(task.getPausedBy()));
+        response.setCancelledByUserId(task.getCancelledBy() == null ? null : task.getCancelledBy().getId());
+        response.setCancelledBy(userDisplayName(task.getCancelledBy()));
+        response.setAllowedActions(TaskAllowedActionsResponse.from(task.getStatus(), scanCount));
         User createdBy = task.getCreatedBy();
         if (createdBy != null) {
             String fullName = createdBy.getFullName();
@@ -60,6 +81,13 @@ public class TaskResponse {
         }
 
         return response;
+    }
+
+    private static String userDisplayName(User user) {
+        if (user == null) return null;
+        return user.getFullName() == null || user.getFullName().isBlank()
+                ? user.getUsername()
+                : user.getFullName();
     }
 
     public String getId() {
@@ -133,6 +161,33 @@ public class TaskResponse {
     public void setScanImageRequired(boolean scanImageRequired) {
         this.scanImageRequired = scanImageRequired;
     }
+
+    public SparePartLocationProgressMode getSparePartLocationProgressMode() {
+        return sparePartLocationProgressMode;
+    }
+
+    public void setSparePartLocationProgressMode(SparePartLocationProgressMode mode) {
+        this.sparePartLocationProgressMode = mode;
+    }
+
+    public long getScanCount() { return scanCount; }
+    public void setScanCount(long scanCount) { this.scanCount = scanCount; }
+    public LocalDateTime getPausedAt() { return pausedAt; }
+    public void setPausedAt(LocalDateTime pausedAt) { this.pausedAt = pausedAt; }
+    public String getPauseReason() { return pauseReason; }
+    public void setPauseReason(String pauseReason) { this.pauseReason = pauseReason; }
+    public String getCancelReason() { return cancelReason; }
+    public void setCancelReason(String cancelReason) { this.cancelReason = cancelReason; }
+    public Long getPausedByUserId() { return pausedByUserId; }
+    public void setPausedByUserId(Long pausedByUserId) { this.pausedByUserId = pausedByUserId; }
+    public String getPausedBy() { return pausedBy; }
+    public void setPausedBy(String pausedBy) { this.pausedBy = pausedBy; }
+    public Long getCancelledByUserId() { return cancelledByUserId; }
+    public void setCancelledByUserId(Long cancelledByUserId) { this.cancelledByUserId = cancelledByUserId; }
+    public String getCancelledBy() { return cancelledBy; }
+    public void setCancelledBy(String cancelledBy) { this.cancelledBy = cancelledBy; }
+    public TaskAllowedActionsResponse getAllowedActions() { return allowedActions; }
+    public void setAllowedActions(TaskAllowedActionsResponse allowedActions) { this.allowedActions = allowedActions; }
 
     public String getTaskName() {
         return taskName;

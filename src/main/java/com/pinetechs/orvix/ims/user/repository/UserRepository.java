@@ -62,5 +62,31 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByUserTypeAndDeletedFalse(UserType userType);
 
+    @Query("""
+        select distinct u
+        from User u
+        join u.companies company
+        join u.inventoryDomains domain
+        where company.id = :companyId
+          and domain = :domain
+          and u.userType = :userType
+          and u.enabled = true
+          and u.deleted = false
+          and (
+              :search is null
+              or upper(u.username) like upper(concat('%', :search, '%'))
+              or upper(u.firstName) like upper(concat('%', :search, '%'))
+              or upper(u.lastName) like upper(concat('%', :search, '%'))
+              or upper(concat(concat(u.firstName, ' '), u.lastName)) like upper(concat('%', :search, '%'))
+          )
+        """)
+    Page<User> findEligibleInventoryStaff(
+            @Param("companyId") Long companyId,
+            @Param("domain") InventoryDomain domain,
+            @Param("search") String search,
+            @Param("userType") UserType userType,
+            Pageable pageable
+    );
+
 
 }

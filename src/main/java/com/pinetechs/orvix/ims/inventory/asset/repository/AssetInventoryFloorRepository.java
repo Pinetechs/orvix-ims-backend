@@ -17,6 +17,20 @@ public interface AssetInventoryFloorRepository extends JpaRepository<AssetInvent
 
     List<AssetInventoryFloor> findByLocationIdOrderByFloorNameAsc(Long locationId);
 
+    @Query("""
+           select floor
+           from AssetInventoryFloor floor
+           where floor.inventoryTask.id = :taskId
+             and floor.location.id = :locationId
+             and (:search is null or lower(floor.floorName) like lower(concat('%', :search, '%')))
+           order by floor.floorName asc
+           """)
+    List<AssetInventoryFloor> searchForApp(
+            @Param("taskId") Long taskId,
+            @Param("locationId") Long locationId,
+            @Param("search") String search
+    );
+
     long countByInventoryTaskId(Long taskId);
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)

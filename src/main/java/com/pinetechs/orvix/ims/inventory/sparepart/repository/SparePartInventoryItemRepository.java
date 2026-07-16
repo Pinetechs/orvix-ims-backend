@@ -1,7 +1,9 @@
 package com.pinetechs.orvix.ims.inventory.sparepart.repository;
 
 import com.pinetechs.orvix.ims.inventory.sparepart.entity.SparePartInventoryItem;
+import com.pinetechs.orvix.ims.inventory.sparepart.entity.SparePartInventoryScan;
 import com.pinetechs.orvix.ims.inventory.sparepart.enums.SparePartInventoryItemStatus;
+import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -10,6 +12,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.Lock;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -63,4 +66,13 @@ public interface SparePartInventoryItemRepository extends JpaRepository<SparePar
            where item.inventoryTask.id = :taskId
            """)
     int deleteByTaskId(@Param("taskId") Long taskId);
+
+
+
+
+
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update SparePartInventoryItem s set s.currentScan = null where s.inventoryTask.id = :taskId")
+    void removeScanItemByTaskId(@Param("taskId") Long taskId);
 }

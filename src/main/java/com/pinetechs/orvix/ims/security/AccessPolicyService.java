@@ -235,6 +235,20 @@ public class AccessPolicyService {
 
     }
 
+    public void assertCanUpdateTask(User user, Long companyId, InventoryDomain domain) {
+        if (user == null) {
+            throw new BusinessException(HttpStatus.UNAUTHORIZED, "Authentication required");
+        }
+        PermissionCode permissionCode = taskUpdatePermission(domain);
+        if (!user.hasPermission(permissionCode)) {
+            throw new BusinessException(HttpStatus.FORBIDDEN, "Task update permission is required");
+        }
+        if (!user.getCompanies().isEmpty() && !user.hasCompany(companyId)) {
+            throw new BusinessException(HttpStatus.FORBIDDEN,
+                    "User is not allowed to update this task for this company");
+        }
+    }
+
 
     public void assertCanAssignInventoryTaskUsers(User user, Long companyId, InventoryDomain domain) {
         if (user == null) {

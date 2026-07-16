@@ -133,11 +133,11 @@ public class SparePartInventoryQueryServiceImpl implements SparePartInventoryQue
     @Override
     @Transactional
     public List<SparePartInventoryAssignmentResponse> assignStaff(Long taskId, AssignInventoryTaskStaffBranchRequest request, User currentUser) {
-        InventoryTask task = getSparePartTask(taskId);
+        InventoryTask task = getSparePartTaskForAssignmentUpdate(taskId);
 
         validateTaskCanBeAssigned(task);
 
-        InventoryTaskStatus nextStatus = resolveAssignmentTargetStatus(request);
+        InventoryTaskStatus nextStatus = resolveAssignmentTargetStatus(task, request);
 
         accessPolicyService.assertCanAssignInventoryTaskUsers(currentUser, task.getCompany().getId(), InventoryDomain.SPARE_PART);
 
@@ -151,33 +151,18 @@ public class SparePartInventoryQueryServiceImpl implements SparePartInventoryQue
         Map<Long, SparePartInventoryBranch> taskBranchesById = loadTaskBranchesById(task);
         validateRequestedBranchesBelongToTask(requestedBranchIdsByUserId, taskBranchesById);
 
-        branchAssignmentRepository.deleteByTaskId(taskId);
-        assignmentRepository.deleteByInventoryTaskId(taskId);
+        List<InventoryTaskAssignment> savedAssignments = synchronizeAssignments(
+                task,
+                currentUser,
+                requestedBranchIdsByUserId,
+                staffById,
+                taskBranchesById
+        );
 
-        List<InventoryTaskAssignment> savedAssignments = new ArrayList<>();
-
-        for (Long userId : userIds) {
-            InventoryTaskAssignment assignment = new InventoryTaskAssignment();
-            assignment.setInventoryTask(task);
-            assignment.setUser(staffById.get(userId));
-            assignment.setAssignedBy(currentUser);
-            assignment.setActive(true);
-
-            InventoryTaskAssignment savedAssignment = assignmentRepository.save(assignment);
-            savedAssignments.add(savedAssignment);
-
-            for (Long branchId : requestedBranchIdsByUserId.get(userId)) {
-                SparePartInventoryBranchAssignment branchAssignment = new SparePartInventoryBranchAssignment();
-                branchAssignment.setAssignment(savedAssignment);
-                branchAssignment.setBranch(taskBranchesById.get(branchId));
-                branchAssignment.setActive(true);
-
-                branchAssignmentRepository.save(branchAssignment);
-            }
+        if (task.getStatus() != nextStatus) {
+            task.setStatus(nextStatus);
+            inventoryTaskRepository.save(task);
         }
-
-        task.setStatus(nextStatus);
-        inventoryTaskRepository.save(task);
 
         return savedAssignments.stream()
                 .map(assignment -> SparePartInventoryAssignmentResponse.from(
@@ -206,6 +191,15 @@ public class SparePartInventoryQueryServiceImpl implements SparePartInventoryQue
         return task;
     }
 
+    private InventoryTask getSparePartTaskForAssignmentUpdate(Long taskId) {
+        InventoryTask task = inventoryTaskRepository.findByIdForUpdate(taskId)
+                .orElseThrow(() -> new BusinessException(HttpStatus.BAD_REQUEST, "Inventory task not found"));
+        if (task.getInventoryDomain() != InventoryDomain.SPARE_PART) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Task is not a spare part inventory task");
+        }
+        return task;
+    }
+
     private SparePartInventoryBranch getTaskBranch(Long taskId, Long branchId) {
         return branchRepository.findById(branchId)
                 .filter(branch -> branch.getInventoryTask() != null && branch.getInventoryTask().getId().equals(taskId))
@@ -214,17 +208,28 @@ public class SparePartInventoryQueryServiceImpl implements SparePartInventoryQue
 
     private void validateTaskCanBeAssigned(InventoryTask task) {
         if (task.getStatus() != InventoryTaskStatus.IMPORT_COMPLETED
-                && task.getStatus() != InventoryTaskStatus.READY_TO_START) {
+                && task.getStatus() != InventoryTaskStatus.READY_FOR_ASSIGNMENT
+                && task.getStatus() != InventoryTaskStatus.READY_TO_START
+                && task.getStatus() != InventoryTaskStatus.IN_PROGRESS
+                && task.getStatus() != InventoryTaskStatus.PAUSED) {
             throw new BusinessException(
-                    HttpStatus.BAD_REQUEST,
-                    "Spare part inventory staff can be assigned only when task is IMPORT_COMPLETED or READY_TO_START"
+                    HttpStatus.CONFLICT,
+                    "Spare-part inventory assignments cannot be changed in task status " + task.getStatus()
             );
         }
     }
 
-    private InventoryTaskStatus resolveAssignmentTargetStatus(AssignInventoryTaskStaffBranchRequest request) {
+    private InventoryTaskStatus resolveAssignmentTargetStatus(
+            InventoryTask task,
+            AssignInventoryTaskStaffBranchRequest request
+    ) {
         if (request == null || request.getBranchAssignments() == null || request.getBranchAssignments().isEmpty()) {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "At least one spare part inventory staff assignment is required");
+        }
+
+        if (task.getStatus() == InventoryTaskStatus.IN_PROGRESS
+                || task.getStatus() == InventoryTaskStatus.PAUSED) {
+            return task.getStatus();
         }
 
         InventoryTaskStatus requestedStatus = request.getTaskStatus();
@@ -266,8 +271,76 @@ public class SparePartInventoryQueryServiceImpl implements SparePartInventoryQue
             if (!user.hasCompany(task.getCompany().getId())) {
                 throw new BusinessException(HttpStatus.BAD_REQUEST, "User " + user.getUsername() + " is not linked to the task company");
             }
+            if (!user.hasInventoryDomain(task.getInventoryDomain())) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST, "User " + user.getUsername() + " is not enabled for spare-part inventory");
+            }
         }
         return usersById;
+    }
+
+    private List<InventoryTaskAssignment> synchronizeAssignments(
+            InventoryTask task,
+            User currentUser,
+            Map<Long, List<Long>> requestedBranchIdsByUserId,
+            Map<Long, User> staffById,
+            Map<Long, SparePartInventoryBranch> taskBranchesById
+    ) {
+        Map<Long, InventoryTaskAssignment> existingByUserId = assignmentRepository
+                .findByInventoryTaskId(task.getId())
+                .stream()
+                .collect(Collectors.toMap(assignment -> assignment.getUser().getId(), assignment -> assignment));
+
+        for (Map.Entry<Long, InventoryTaskAssignment> entry : existingByUserId.entrySet()) {
+            entry.getValue().setActive(requestedBranchIdsByUserId.containsKey(entry.getKey()));
+        }
+        assignmentRepository.saveAll(existingByUserId.values());
+
+        List<InventoryTaskAssignment> activeAssignments = new ArrayList<>();
+        for (Map.Entry<Long, List<Long>> requested : requestedBranchIdsByUserId.entrySet()) {
+            Long userId = requested.getKey();
+            InventoryTaskAssignment assignment = existingByUserId.get(userId);
+            if (assignment == null) {
+                assignment = new InventoryTaskAssignment();
+                assignment.setInventoryTask(task);
+                assignment.setUser(staffById.get(userId));
+            }
+            assignment.setAssignedBy(currentUser);
+            assignment.setActive(true);
+            assignment = assignmentRepository.save(assignment);
+            synchronizeBranchAssignments(
+                    assignment,
+                    new LinkedHashSet<>(requested.getValue()),
+                    taskBranchesById
+            );
+            activeAssignments.add(assignment);
+        }
+        return activeAssignments;
+    }
+
+    private void synchronizeBranchAssignments(
+            InventoryTaskAssignment assignment,
+            Set<Long> requestedBranchIds,
+            Map<Long, SparePartInventoryBranch> taskBranchesById
+    ) {
+        Map<Long, SparePartInventoryBranchAssignment> existingByBranchId = branchAssignmentRepository
+                .findByAssignmentId(assignment.getId())
+                .stream()
+                .collect(Collectors.toMap(value -> value.getBranch().getId(), value -> value));
+
+        for (Map.Entry<Long, SparePartInventoryBranchAssignment> entry : existingByBranchId.entrySet()) {
+            entry.getValue().setActive(requestedBranchIds.contains(entry.getKey()));
+        }
+        branchAssignmentRepository.saveAll(existingByBranchId.values());
+
+        for (Long branchId : requestedBranchIds) {
+            if (!existingByBranchId.containsKey(branchId)) {
+                SparePartInventoryBranchAssignment branchAssignment = new SparePartInventoryBranchAssignment();
+                branchAssignment.setAssignment(assignment);
+                branchAssignment.setBranch(taskBranchesById.get(branchId));
+                branchAssignment.setActive(true);
+                branchAssignmentRepository.save(branchAssignment);
+            }
+        }
     }
 
     private Map<Long, List<Long>> normalizeBranchAssignments(List<StaffBranchAssignmentRequest> branchAssignments) {

@@ -1,6 +1,8 @@
 package com.pinetechs.orvix.ims.app.service;
 
 import com.pinetechs.orvix.ims.app.dto.AppScanCorrectionRequest;
+import com.pinetechs.orvix.ims.app.dto.AppScanItemSummaryResponse;
+import com.pinetechs.orvix.ims.app.dto.AppScanLocationSummaryResponse;
 import com.pinetechs.orvix.ims.app.dto.AppScanRequest;
 import com.pinetechs.orvix.ims.app.dto.AppScanResponse;
 import com.pinetechs.orvix.ims.common.exception.BusinessException;
@@ -288,7 +290,48 @@ public class AppVehicleScanService {
         response.setAccepted(accepted);
         response.setCorrectionAllowed(correctionAllowed);
         response.setServerScannedAt(scan.getScannedAt());
+        response.setItem(itemSummary(scan, item));
+        response.setActualLocation(actualLocationSummary(scan));
         return response;
+    }
+
+    private AppScanItemSummaryResponse itemSummary(
+            VehicleInventoryScan scan,
+            VehicleInventoryItem item
+    ) {
+        AppScanItemSummaryResponse summary = new AppScanItemSummaryResponse();
+        String vin = item == null ? scan.getScannedVin() : item.getVinNo();
+        summary.setCode(item == null || item.getPartNo() == null ? vin : item.getPartNo());
+        summary.setBarcode(vin);
+        if (item == null) {
+            summary.setDisplayName(vin);
+            return summary;
+        }
+        String vehicleName = joinNotBlank(item.getMake(), item.getModelName());
+        summary.setDisplayName(vehicleName == null ? vin : vehicleName);
+        summary.setType("VEHICLE");
+        summary.setMake(item.getMake());
+        summary.setModel(item.getModelName());
+        summary.setModelYear(item.getModelYear());
+        summary.setColor(item.getColorNo());
+        return summary;
+    }
+
+    private AppScanLocationSummaryResponse actualLocationSummary(VehicleInventoryScan scan) {
+        AppScanLocationSummaryResponse summary = new AppScanLocationSummaryResponse();
+        if (scan.getActualLocationEntity() != null) {
+            summary.setLocationId(scan.getActualLocationEntity().getId());
+        }
+        summary.setLocationCode(scan.getActualStoreNo());
+        summary.setLocationName(scan.getActualLocation());
+        return summary;
+    }
+
+    private String joinNotBlank(String first, String second) {
+        String left = first == null ? "" : first.trim();
+        String right = second == null ? "" : second.trim();
+        String joined = (left + " " + right).trim();
+        return joined.isEmpty() ? null : joined;
     }
 
     private AppScanRequest correctionAsScanRequest(AppScanCorrectionRequest correction, String code) {

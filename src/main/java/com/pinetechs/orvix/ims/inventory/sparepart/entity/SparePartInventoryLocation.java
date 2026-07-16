@@ -1,6 +1,7 @@
 package com.pinetechs.orvix.ims.inventory.sparepart.entity;
 
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
+import com.pinetechs.orvix.ims.user.entity.User;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -57,6 +58,16 @@ public class SparePartInventoryLocation {
     @Column(name = "location_mismatch_items", nullable = false)
     private Integer locationMismatchItems = 0;
 
+    @Column(name = "completed", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private boolean completed;
+
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "completed_by_user_id")
+    private User completedBy;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -92,6 +103,12 @@ public class SparePartInventoryLocation {
     public void setOverageItems(Integer overageItems) { this.overageItems = overageItems; }
     public Integer getLocationMismatchItems() { return locationMismatchItems; }
     public void setLocationMismatchItems(Integer locationMismatchItems) { this.locationMismatchItems = locationMismatchItems; }
+    public boolean isCompleted() { return completed; }
+    public void setCompleted(boolean completed) { this.completed = completed; }
+    public LocalDateTime getCompletedAt() { return completedAt; }
+    public void setCompletedAt(LocalDateTime completedAt) { this.completedAt = completedAt; }
+    public User getCompletedBy() { return completedBy; }
+    public void setCompletedBy(User completedBy) { this.completedBy = completedBy; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
 }

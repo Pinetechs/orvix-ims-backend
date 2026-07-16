@@ -84,4 +84,6 @@ public interface InventoryTaskAssignmentRepository extends JpaRepository<Invento
            where assignment.inventoryTask.id = :taskId
            """)
     int deleteByInventoryTaskId(@Param("taskId") Long taskId);
+
+
 }

@@ -1,6 +1,8 @@
 package com.pinetechs.orvix.ims.app.service;
 
 import com.pinetechs.orvix.ims.app.dto.AppScanCorrectionRequest;
+import com.pinetechs.orvix.ims.app.dto.AppScanItemSummaryResponse;
+import com.pinetechs.orvix.ims.app.dto.AppScanLocationSummaryResponse;
 import com.pinetechs.orvix.ims.app.dto.AppScanRequest;
 import com.pinetechs.orvix.ims.app.dto.AppScanResponse;
 import com.pinetechs.orvix.ims.common.exception.BusinessException;
@@ -302,7 +304,53 @@ public class AppAssetScanService {
         response.setAccepted(accepted);
         response.setCorrectionAllowed(correctionAllowed);
         response.setServerScannedAt(scan.getScannedAt());
+        response.setItem(itemSummary(scan, item));
+        response.setActualLocation(actualLocationSummary(scan));
         return response;
+    }
+
+    private AppScanItemSummaryResponse itemSummary(
+            AssetInventoryScan scan,
+            AssetInventoryItem item
+    ) {
+        AppScanItemSummaryResponse summary = new AppScanItemSummaryResponse();
+        String barcode = item == null ? scan.getScannedBarcode() : item.getBarcode();
+        summary.setCode(barcode);
+        summary.setBarcode(barcode);
+        if (item == null) {
+            summary.setDisplayName(barcode);
+            return summary;
+        }
+        summary.setDisplayName(firstNotBlank(
+                item.getDescription(), item.getAssetType(), item.getAssetCategory(), barcode));
+        summary.setCategory(item.getAssetCategory());
+        summary.setType(item.getAssetType());
+        summary.setCondition(item.getAssetCondition());
+        return summary;
+    }
+
+    private AppScanLocationSummaryResponse actualLocationSummary(AssetInventoryScan scan) {
+        AppScanLocationSummaryResponse summary = new AppScanLocationSummaryResponse();
+        if (scan.getActualLocation() != null) {
+            summary.setLocationId(scan.getActualLocation().getId());
+            summary.setLocationName(scan.getActualLocation().getLocationName());
+        }
+        if (scan.getActualFloor() != null) {
+            summary.setFloorId(scan.getActualFloor().getId());
+            summary.setFloorName(scan.getActualFloor().getFloorName());
+        }
+        if (scan.getActualPlace() != null) {
+            summary.setPlaceId(scan.getActualPlace().getId());
+            summary.setPlaceName(scan.getActualPlace().getPlaceName());
+        }
+        return summary;
+    }
+
+    private String firstNotBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) return value;
+        }
+        return null;
     }
 
     private AppScanRequest correctionAsScanRequest(AppScanCorrectionRequest correction, String code) {

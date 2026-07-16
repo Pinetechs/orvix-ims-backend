@@ -1,6 +1,7 @@
 package com.pinetechs.orvix.ims.inventory.task.dto;
 
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
+import com.pinetechs.orvix.ims.inventory.sparepart.enums.SparePartLocationProgressMode;
 
 public class CreateInventoryTaskRequest {
 
@@ -10,6 +11,7 @@ public class CreateInventoryTaskRequest {
     private String description;
     private String inventoryDomain;
     private Boolean scanImageRequired = true;
+    private SparePartLocationProgressMode sparePartLocationProgressMode = SparePartLocationProgressMode.BASIC;
 
 
     public Long getCompanyId() {return companyId;}
@@ -49,5 +51,13 @@ public class CreateInventoryTaskRequest {
 
     public void setScanImageRequired(Boolean scanImageRequired) {
         this.scanImageRequired = scanImageRequired;
+    }
+
+    public SparePartLocationProgressMode getSparePartLocationProgressMode() {
+        return sparePartLocationProgressMode;
+    }
+
+    public void setSparePartLocationProgressMode(SparePartLocationProgressMode mode) {
+        this.sparePartLocationProgressMode = mode;
     }
 }
