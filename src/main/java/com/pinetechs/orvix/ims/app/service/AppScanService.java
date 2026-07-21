@@ -51,7 +51,10 @@ public class AppScanService {
 
 
         validateDomainScanRequest(task.getInventoryDomain(), request);
+
+        // this for check if the task is configured to require an image, and if so, it will throw an exception if the image is not provided
         support.requireImageWhenConfigured(task, image);
+
 
         String payloadHash = support.scanFingerprint(request, image);
 

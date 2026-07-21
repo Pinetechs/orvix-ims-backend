@@ -10,19 +10,18 @@ import com.pinetechs.orvix.ims.file.entity.UploadedFile;
 import com.pinetechs.orvix.ims.file.service.UploadedFileService;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryScanEventType;
-import com.pinetechs.orvix.ims.inventory.common.enums.InventoryTaskStatus;
 import com.pinetechs.orvix.ims.inventory.sparepart.entity.*;
 import com.pinetechs.orvix.ims.inventory.sparepart.enums.*;
 import com.pinetechs.orvix.ims.inventory.sparepart.repository.*;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskRepository;
+import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskActivityService;
 import com.pinetechs.orvix.ims.user.entity.User;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -37,6 +36,7 @@ public class AppSparePartScanService {
     private final SparePartInventoryBranchAssignmentRepository assignmentRepository;
     private final SparePartInventoryScanRepository scanRepository;
     private final InventoryTaskRepository taskRepository;
+    private final InventoryTaskActivityService taskActivityService;
     private final UploadedFileService uploadedFileService;
 
     public AppSparePartScanService(
@@ -47,6 +47,7 @@ public class AppSparePartScanService {
             SparePartInventoryBranchAssignmentRepository assignmentRepository,
             SparePartInventoryScanRepository scanRepository,
             InventoryTaskRepository taskRepository,
+            InventoryTaskActivityService taskActivityService,
             UploadedFileService uploadedFileService
     ) {
         this.support = support;
@@ -56,6 +57,7 @@ public class AppSparePartScanService {
         this.assignmentRepository = assignmentRepository;
         this.scanRepository = scanRepository;
         this.taskRepository = taskRepository;
+        this.taskActivityService = taskActivityService;
         this.uploadedFileService = uploadedFileService;
     }
 
@@ -93,7 +95,7 @@ public class AppSparePartScanService {
             scan.setReviewRequired(true);
             scan = scanRepository.saveAndFlush(scan);
             reopenLocation(taskId, actual.location());
-            startTask(taskId);
+            startTask(task, user);
             return response(scan, null, "REVIEW", "scan.recorded_for_review", true, false);
         }
 
@@ -124,7 +126,7 @@ public class AppSparePartScanService {
         itemRepository.save(item);
         adjustCounters(item, null, outcome, 1);
         reopenLocation(taskId, actual.location());
-        startTask(taskId);
+        startTask(task, user);
         return response(scan, item, "RECORDED", "scan.recorded", true, outcome.locationMismatch());
     }
 
@@ -324,9 +326,8 @@ public class AppSparePartScanService {
         return image == null ? null : uploadedFileService.markAsAttached(image.getId());
     }
 
-    private void startTask(Long taskId) {
-        taskRepository.markInProgressOnFirstScan(taskId, LocalDate.now(),
-                InventoryTaskStatus.READY_TO_START, InventoryTaskStatus.IN_PROGRESS);
+    private void startTask(InventoryTask task, User user) {
+        taskActivityService.startOnFirstScan(task, user);
     }
 
     private void reopenLocation(Long taskId, SparePartInventoryLocation location) {

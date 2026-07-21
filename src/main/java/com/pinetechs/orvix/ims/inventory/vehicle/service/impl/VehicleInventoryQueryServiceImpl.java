@@ -10,6 +10,8 @@ import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTaskAssignment;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskAssignmentRepository;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskRepository;
+import com.pinetechs.orvix.ims.inventory.task.enums.InventoryTaskActivityType;
+import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskActivityService;
 import com.pinetechs.orvix.ims.inventory.vehicle.dto.VehicleInventoryItemResponse;
 import com.pinetechs.orvix.ims.inventory.vehicle.dto.VehicleInventoryLocationResponse;
 import com.pinetechs.orvix.ims.inventory.vehicle.entity.VehicleInventoryLocation;
@@ -41,10 +43,13 @@ public class VehicleInventoryQueryServiceImpl implements VehicleInventoryQuerySe
     private final UserRepository userRepository;
     private final InventoryTaskAssignmentRepository assignmentRepository;
     private final VehicleInventoryLocationAssignmentRepository locationAssignmentRepository;
+    private final InventoryTaskActivityService taskActivityService;
 
 
     public VehicleInventoryQueryServiceImpl(InventoryTaskRepository taskRepository, VehicleInventoryItemRepository itemRepository, VehicleInventoryLocationRepository locationRepository,
-                                            AccessPolicyService accessPolicyService, UserRepository userRepository, InventoryTaskAssignmentRepository assignmentRepository, VehicleInventoryLocationAssignmentRepository locationAssignmentRepository) {
+                                            AccessPolicyService accessPolicyService, UserRepository userRepository, InventoryTaskAssignmentRepository assignmentRepository,
+                                            VehicleInventoryLocationAssignmentRepository locationAssignmentRepository,
+                                            InventoryTaskActivityService taskActivityService) {
         this.inventoryTaskRepository = taskRepository;
         this.itemRepository = itemRepository;
         this.locationRepository = locationRepository;
@@ -52,6 +57,7 @@ public class VehicleInventoryQueryServiceImpl implements VehicleInventoryQuerySe
         this.userRepository = userRepository;
         this.assignmentRepository = assignmentRepository;
         this.locationAssignmentRepository = locationAssignmentRepository;
+        this.taskActivityService = taskActivityService;
     }
 
     @Override
@@ -122,10 +128,25 @@ public class VehicleInventoryQueryServiceImpl implements VehicleInventoryQuerySe
                 taskLocationsById
         );
 
-        if (task.getStatus() != nextStatus) {
+        InventoryTaskStatus fromStatus = task.getStatus();
+        if (fromStatus != nextStatus) {
             task.setStatus(nextStatus);
             inventoryTaskRepository.save(task);
         }
+
+        int locationLinkCount = requestedLocationIdsByUserId.values().stream()
+                .mapToInt(List::size)
+                .sum();
+        taskActivityService.record(
+                task,
+                InventoryTaskActivityType.ASSIGNMENTS_UPDATED,
+                fromStatus,
+                nextStatus,
+                currentUser,
+                null,
+                "staff=" + requestedLocationIdsByUserId.size()
+                        + ", locationAssignments=" + locationLinkCount
+        );
 
         return savedAssignments.stream()
                 .map(assignment -> InventoryTaskAssignmentResponse.from(

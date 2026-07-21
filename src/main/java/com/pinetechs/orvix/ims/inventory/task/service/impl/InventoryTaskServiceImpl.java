@@ -9,6 +9,7 @@ import com.pinetechs.orvix.ims.inventory.task.dto.CreateInventoryTaskRequest;
 import com.pinetechs.orvix.ims.inventory.sparepart.enums.SparePartLocationProgressMode;
 import com.pinetechs.orvix.ims.inventory.task.dto.*;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
+import com.pinetechs.orvix.ims.inventory.task.enums.InventoryTaskActivityType;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskAssignmentRepository;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskRepository;
 import com.pinetechs.orvix.ims.inventory.vehicle.repository.VehicleInventoryLocationAssignmentRepository;
@@ -18,7 +19,9 @@ import com.pinetechs.orvix.ims.inventory.asset.repository.AssetInventoryLocation
 import com.pinetechs.orvix.ims.inventory.sparepart.repository.SparePartInventoryBranchAssignmentRepository;
 import com.pinetechs.orvix.ims.inventory.sparepart.repository.SparePartInventoryBranchRepository;
 import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskService;
+import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskActivityService;
 import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskPurgeService;
+import com.pinetechs.orvix.ims.inventory.tracking.repository.TrackingJdbcRepository;
 import com.pinetechs.orvix.ims.security.AccessPolicyService;
 import com.pinetechs.orvix.ims.user.entity.User;
 import com.pinetechs.orvix.ims.user.enums.PermissionCode;
@@ -35,7 +38,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -56,6 +58,8 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
     private final AssetInventoryLocationAssignmentRepository assetLocationAssignmentRepository;
     private final SparePartInventoryBranchRepository spareBranchRepository;
     private final SparePartInventoryBranchAssignmentRepository spareBranchAssignmentRepository;
+    private final InventoryTaskActivityService taskActivityService;
+    private final TrackingJdbcRepository trackingJdbcRepository;
 
 
     public InventoryTaskServiceImpl(
@@ -70,6 +74,8 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
             AssetInventoryLocationAssignmentRepository assetLocationAssignmentRepository,
             SparePartInventoryBranchRepository spareBranchRepository,
             SparePartInventoryBranchAssignmentRepository spareBranchAssignmentRepository,
+            InventoryTaskActivityService taskActivityService,
+            TrackingJdbcRepository trackingJdbcRepository,
             InventoryTaskPurgeService purgeService) {
         this.inventoryTaskRepository = inventoryTaskRepository;
         this.companyRepository = companyRepository;
@@ -82,6 +88,8 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
         this.assetLocationAssignmentRepository = assetLocationAssignmentRepository;
         this.spareBranchRepository = spareBranchRepository;
         this.spareBranchAssignmentRepository = spareBranchAssignmentRepository;
+        this.taskActivityService = taskActivityService;
+        this.trackingJdbcRepository = trackingJdbcRepository;
         this.purgeService = purgeService;
     }
 
@@ -107,7 +115,17 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
                     "Detailed spare-part location progress is valid only for spare-part tasks");
         }
         task.setSparePartLocationProgressMode(progressMode);
-        return TaskResponse.from( inventoryTaskRepository.save(task),purgeService.countScans(task));
+        InventoryTask savedTask = inventoryTaskRepository.save(task);
+        taskActivityService.record(
+                savedTask,
+                InventoryTaskActivityType.TASK_CREATED,
+                null,
+                InventoryTaskStatus.CREATED,
+                currentUser,
+                null,
+                "Inventory task created"
+        );
+        return toTaskResponse(savedTask, currentUser);
     }
 
 
@@ -116,7 +134,7 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
 
     @Override
     public TaskResponse startTask(Long taskId, User currentUser) {
-        InventoryTask task = getTask(taskId);
+        InventoryTask task = getTaskForUpdate(taskId);
         assertCanUpdateTask(currentUser, task);
 
         if (task.getStatus() != InventoryTaskStatus.IMPORT_COMPLETED
@@ -127,18 +145,33 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
 
         validateTaskReadyToStart(task);
 
+        InventoryTaskStatus fromStatus = task.getStatus();
+        LocalDateTime startedAt = LocalDateTime.now();
         task.setStatus(InventoryTaskStatus.IN_PROGRESS);
 
         if (task.getStartDate() == null) {
-            task.setStartDate(LocalDate.now());
+            task.setStartDate(startedAt.toLocalDate());
+        }
+        if (task.getStartedAt() == null) {
+            task.setStartedAt(startedAt);
         }
 
-        return TaskResponse.from( inventoryTaskRepository.save(task),purgeService.countScans(task));
+        InventoryTask savedTask = inventoryTaskRepository.save(task);
+        taskActivityService.record(
+                savedTask,
+                InventoryTaskActivityType.TASK_STARTED,
+                fromStatus,
+                InventoryTaskStatus.IN_PROGRESS,
+                currentUser,
+                null,
+                "Task started manually"
+        );
+        return toTaskResponse(savedTask, currentUser);
     }
 
     @Override
     public TaskResponse markReadyToStart(Long taskId, User currentUser) {
-        InventoryTask task = getTask(taskId);
+        InventoryTask task = getTaskForUpdate(taskId);
 
         accessPolicyService.assertCanAssignInventoryTaskUsers(
                 currentUser,
@@ -147,7 +180,7 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
         );
 
         if (task.getStatus() == InventoryTaskStatus.READY_TO_START) {
-            return TaskResponse.from(task,purgeService.countScans(task));
+            return toTaskResponse(task, currentUser);
         }
 
         if (task.getStatus() != InventoryTaskStatus.IMPORT_COMPLETED
@@ -158,8 +191,19 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
 
         validateTaskReadyToStart(task);
 
+        InventoryTaskStatus fromStatus = task.getStatus();
         task.setStatus(InventoryTaskStatus.READY_TO_START);
-        return TaskResponse.from( inventoryTaskRepository.save(task),purgeService.countScans(task));
+        InventoryTask savedTask = inventoryTaskRepository.save(task);
+        taskActivityService.record(
+                savedTask,
+                InventoryTaskActivityType.MARKED_READY,
+                fromStatus,
+                InventoryTaskStatus.READY_TO_START,
+                currentUser,
+                null,
+                "Task marked ready to start"
+        );
+        return toTaskResponse(savedTask, currentUser);
     }
 
 
@@ -168,70 +212,147 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
 
     @Override
     public TaskResponse pauseTask(Long taskId, String pauseReason, User currentUser) {
-        InventoryTask task = getTask(taskId);
+        InventoryTask task = getTaskForUpdate(taskId);
         assertCanUpdateTask(currentUser, task);
 
         if (task.getStatus() != InventoryTaskStatus.IN_PROGRESS) {
             throw new BusinessException(HttpStatus.CONFLICT, "Only an IN_PROGRESS task can be paused");
         }
 
+        String normalizedReason = requireReason(pauseReason, "Pause reason is required");
+        InventoryTaskStatus fromStatus = task.getStatus();
         task.setStatus(InventoryTaskStatus.PAUSED);
         task.setPausedAt(LocalDateTime.now());
-        task.setPauseReason(requireReason(pauseReason, "Pause reason is required"));
+        task.setPauseReason(normalizedReason);
         task.setPausedBy(currentUser);
 
-
-
-        return TaskResponse.from( inventoryTaskRepository.save(task),purgeService.countScans(task));
+        InventoryTask savedTask = inventoryTaskRepository.save(task);
+        taskActivityService.record(
+                savedTask,
+                InventoryTaskActivityType.TASK_PAUSED,
+                fromStatus,
+                InventoryTaskStatus.PAUSED,
+                currentUser,
+                normalizedReason,
+                null
+        );
+        return toTaskResponse(savedTask, currentUser);
     }
 
     @Override
     public TaskResponse resumeTask(Long taskId, User currentUser) {
-        InventoryTask task = getTask(taskId);
+        InventoryTask task = getTaskForUpdate(taskId);
         assertCanUpdateTask(currentUser, task);
 
         if (task.getStatus() != InventoryTaskStatus.PAUSED) {
             throw new BusinessException(HttpStatus.CONFLICT, "Only a PAUSED task can be resumed");
         }
 
+        InventoryTaskStatus fromStatus = task.getStatus();
         task.setStatus(InventoryTaskStatus.IN_PROGRESS);
+        task.setPausedAt(null);
+        task.setPauseReason(null);
+        task.setPausedBy(null);
 
-        return TaskResponse.from( inventoryTaskRepository.save(task),purgeService.countScans(task));
+        InventoryTask savedTask = inventoryTaskRepository.save(task);
+        taskActivityService.record(
+                savedTask,
+                InventoryTaskActivityType.TASK_RESUMED,
+                fromStatus,
+                InventoryTaskStatus.IN_PROGRESS,
+                currentUser,
+                null,
+                null
+        );
+        return toTaskResponse(savedTask, currentUser);
     }
 
     @Override
     public TaskResponse moveToReview(Long taskId, User currentUser) {
-        InventoryTask task = getTask(taskId);
+        InventoryTask task = getTaskForUpdate(taskId);
         assertCanUpdateTask(currentUser, task);
 
         if (task.getStatus() != InventoryTaskStatus.IN_PROGRESS) {
             throw new BusinessException(HttpStatus.CONFLICT, "Only an IN_PROGRESS task can move to review");
         }
 
+        InventoryTaskStatus fromStatus = task.getStatus();
         task.setStatus(InventoryTaskStatus.UNDER_REVIEW);
+        task.setReviewStartedAt(LocalDateTime.now());
 
-        return TaskResponse.from( inventoryTaskRepository.save(task),purgeService.countScans(task));
+        InventoryTask savedTask = inventoryTaskRepository.save(task);
+        taskActivityService.record(
+                savedTask,
+                InventoryTaskActivityType.SUBMITTED_FOR_REVIEW,
+                fromStatus,
+                InventoryTaskStatus.UNDER_REVIEW,
+                currentUser,
+                null,
+                null
+        );
+        return toTaskResponse(savedTask, currentUser);
+    }
+
+    @Override
+    public TaskResponse returnToProgress(Long taskId, String reason, User currentUser) {
+        InventoryTask task = getTaskForUpdate(taskId);
+        assertCanUpdateTask(currentUser, task);
+
+        if (task.getStatus() != InventoryTaskStatus.UNDER_REVIEW) {
+            throw new BusinessException(HttpStatus.CONFLICT,
+                    "Only an UNDER_REVIEW task can be returned to progress");
+        }
+
+        String normalizedReason = requireReason(reason, "Return reason is required");
+        InventoryTaskStatus fromStatus = task.getStatus();
+        task.setStatus(InventoryTaskStatus.IN_PROGRESS);
+        task.setReviewStartedAt(null);
+
+        InventoryTask savedTask = inventoryTaskRepository.save(task);
+        taskActivityService.record(
+                savedTask,
+                InventoryTaskActivityType.RETURNED_TO_PROGRESS,
+                fromStatus,
+                InventoryTaskStatus.IN_PROGRESS,
+                currentUser,
+                normalizedReason,
+                null
+        );
+        return toTaskResponse(savedTask, currentUser);
     }
 
     @Override
     public TaskResponse completeTask(Long taskId, User currentUser) {
-        InventoryTask task = getTask(taskId);
-        assertCanUpdateTask(currentUser, task);
+        InventoryTask task = getTaskForUpdate(taskId);
+        accessPolicyService.assertCanCloseTask(
+                currentUser, task.getCompany().getId(), task.getInventoryDomain());
 
         if (task.getStatus() != InventoryTaskStatus.UNDER_REVIEW) {
             throw new BusinessException(HttpStatus.CONFLICT, "Only an UNDER_REVIEW task can be completed");
         }
 
+        InventoryTaskStatus fromStatus = task.getStatus();
         task.setStatus(InventoryTaskStatus.COMPLETED);
         task.setClosedAt(LocalDateTime.now());
 
-        return TaskResponse.from( inventoryTaskRepository.save(task),purgeService.countScans(task));
+        InventoryTask savedTask = inventoryTaskRepository.save(task);
+        taskActivityService.record(
+                savedTask,
+                InventoryTaskActivityType.TASK_COMPLETED,
+                fromStatus,
+                InventoryTaskStatus.COMPLETED,
+                currentUser,
+                null,
+                null
+        );
+        return toTaskResponse(savedTask, currentUser);
     }
 
     @Override
     public TaskResponse cancelTask(Long taskId, String cancelReason, User currentUser) {
-        InventoryTask task = getTask(taskId);
-        assertCanUpdateTask(currentUser, task);
+        InventoryTask task = getTaskForUpdate(taskId);
+        accessPolicyService.assertCanCloseTask(
+                currentUser, task.getCompany().getId(), task.getInventoryDomain());
 
         if (task.getStatus() == InventoryTaskStatus.COMPLETED
                 || task.getStatus() == InventoryTaskStatus.CANCELLED) {
@@ -243,12 +364,24 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
                     "Task cannot be cancelled while its import job is pending or running");
         }
 
+        String normalizedReason = requireReason(cancelReason, "Cancellation reason is required");
+        InventoryTaskStatus fromStatus = task.getStatus();
         task.setStatus(InventoryTaskStatus.CANCELLED);
         task.setClosedAt(LocalDateTime.now());
-        task.setCancelReason(requireReason(cancelReason, "Cancellation reason is required"));
+        task.setCancelReason(normalizedReason);
         task.setCancelledBy(currentUser);
 
-        return TaskResponse.from( inventoryTaskRepository.save(task),purgeService.countScans(task));
+        InventoryTask savedTask = inventoryTaskRepository.save(task);
+        taskActivityService.record(
+                savedTask,
+                InventoryTaskActivityType.TASK_CANCELLED,
+                fromStatus,
+                InventoryTaskStatus.CANCELLED,
+                currentUser,
+                normalizedReason,
+                null
+        );
+        return toTaskResponse(savedTask, currentUser);
     }
 
 
@@ -270,7 +403,7 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
 
         accessPolicyService.assertCanViewInventoryTask(currentUser, task);
 
-        return toTaskResponse(task);
+        return toTaskResponse(task, currentUser);
     }
 
     @Override
@@ -298,9 +431,12 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
             throw new BusinessException(HttpStatus.BAD_REQUEST, "At least one scan setting is required");
         }
 
-        InventoryTask task = getTask(taskId);
+        InventoryTask task = getTaskForUpdate(taskId);
         assertCanUpdateTask(currentUser, task);
         assertTaskIsOpen(task, "Scan settings cannot be changed for a closed task");
+
+        boolean previousScanImageRequired = task.isScanImageRequired();
+        SparePartLocationProgressMode previousProgressMode = task.getSparePartLocationProgressMode();
 
         if (request.getScanImageRequired() != null) {
             task.setScanImageRequired(request.getScanImageRequired());
@@ -313,7 +449,24 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
             task.setSparePartLocationProgressMode(request.getSparePartLocationProgressMode());
         }
 
-        return toTaskResponse(inventoryTaskRepository.save(task));
+        InventoryTask savedTask = inventoryTaskRepository.save(task);
+        if (previousScanImageRequired != savedTask.isScanImageRequired()
+                || previousProgressMode != savedTask.getSparePartLocationProgressMode()) {
+            String details = "scanImageRequired: " + previousScanImageRequired
+                    + " -> " + savedTask.isScanImageRequired()
+                    + ", sparePartLocationProgressMode: " + previousProgressMode
+                    + " -> " + savedTask.getSparePartLocationProgressMode();
+            taskActivityService.record(
+                    savedTask,
+                    InventoryTaskActivityType.SCAN_SETTINGS_UPDATED,
+                    savedTask.getStatus(),
+                    savedTask.getStatus(),
+                    currentUser,
+                    null,
+                    details
+            );
+        }
+        return toTaskResponse(savedTask, currentUser);
     }
 
     @Override
@@ -382,7 +535,13 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
                 status
         );
 
-        return inventoryTaskRepository.findAll(specification, pageable).map(this::toTaskResponse);
+        Page<InventoryTask> taskPage = inventoryTaskRepository.findAll(specification, pageable);
+        Map<Long, Long> scanCounts = loadScanCounts(taskPage.getContent());
+        return taskPage.map(task -> TaskResponse.from(
+                task,
+                scanCounts.getOrDefault(task.getId(), 0L),
+                currentUser
+        ));
     }
 
 
@@ -601,8 +760,27 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Inventory task not found"));
     }
 
-    private TaskResponse toTaskResponse(InventoryTask task) {
-        return TaskResponse.from(task, purgeService.countScans(task));
+    private InventoryTask getTaskForUpdate(Long taskId) {
+        return inventoryTaskRepository.findByIdForUpdate(taskId)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND, "Inventory task not found"));
+    }
+
+    private TaskResponse toTaskResponse(InventoryTask task, User viewer) {
+        return TaskResponse.from(task, purgeService.countScans(task), viewer);
+    }
+
+    private Map<Long, Long> loadScanCounts(List<InventoryTask> tasks) {
+        Map<Long, Long> counts = new HashMap<>();
+        Map<InventoryDomain, List<Long>> taskIdsByDomain = tasks.stream()
+                .collect(Collectors.groupingBy(
+                        InventoryTask::getInventoryDomain,
+                        () -> new EnumMap<>(InventoryDomain.class),
+                        Collectors.mapping(InventoryTask::getId, Collectors.toList())
+                ));
+        taskIdsByDomain.forEach((domain, taskIds) ->
+                trackingJdbcRepository.findEventMetrics(domain, taskIds)
+                        .forEach((taskId, metrics) -> counts.put(taskId, metrics.totalEvents())));
+        return counts;
     }
 
     private void assertCanUpdateTask(User currentUser, InventoryTask task) {

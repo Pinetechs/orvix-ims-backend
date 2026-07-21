@@ -73,6 +73,12 @@ public class InventoryTask {
     @Column(name = "start_date")
     private LocalDate startDate;
 
+    @Column(name = "started_at")
+    private LocalDateTime startedAt;
+
+    @Column(name = "review_started_at")
+    private LocalDateTime reviewStartedAt;
+
     @Column(name = "paused_at")
     private LocalDateTime pausedAt;
 
@@ -126,6 +132,10 @@ public class InventoryTask {
     public InventoryTaskStatus getStatus() { return status; }
     public void setStatus(InventoryTaskStatus status) { this.status = status; }
     public LocalDate getStartDate() { return startDate; }
+    public LocalDateTime getStartedAt() { return startedAt; }
+    public void setStartedAt(LocalDateTime startedAt) { this.startedAt = startedAt; }
+    public LocalDateTime getReviewStartedAt() { return reviewStartedAt; }
+    public void setReviewStartedAt(LocalDateTime reviewStartedAt) { this.reviewStartedAt = reviewStartedAt; }
     public LocalDateTime getClosedAt() { return closedAt; }
     public void setClosedAt(LocalDateTime closedAt) { this.closedAt = closedAt; }
     public User getCreatedBy() { return createdBy; }

@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -141,6 +142,7 @@ public class AppScanSupport {
         if (task.getStatus() == InventoryTaskStatus.READY_TO_START) {
             task.setStatus(InventoryTaskStatus.IN_PROGRESS);
             if (task.getStartDate() == null) task.setStartDate(LocalDate.now());
+            if (task.getStartedAt() == null) task.setStartedAt(LocalDateTime.now());
         }
     }
 

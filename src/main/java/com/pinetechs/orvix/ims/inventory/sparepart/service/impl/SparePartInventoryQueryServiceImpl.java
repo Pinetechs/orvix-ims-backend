@@ -13,6 +13,8 @@ import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTaskAssignment;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskAssignmentRepository;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskRepository;
+import com.pinetechs.orvix.ims.inventory.task.enums.InventoryTaskActivityType;
+import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskActivityService;
 import com.pinetechs.orvix.ims.security.AccessPolicyService;
 import com.pinetechs.orvix.ims.user.entity.User;
 import com.pinetechs.orvix.ims.user.enums.UserType;
@@ -38,6 +40,7 @@ public class SparePartInventoryQueryServiceImpl implements SparePartInventoryQue
     private final UserRepository userRepository;
     private final InventoryTaskAssignmentRepository assignmentRepository;
     private final SparePartInventoryBranchAssignmentRepository branchAssignmentRepository;
+    private final InventoryTaskActivityService taskActivityService;
 
     public SparePartInventoryQueryServiceImpl(
             InventoryTaskRepository inventoryTaskRepository,
@@ -48,7 +51,8 @@ public class SparePartInventoryQueryServiceImpl implements SparePartInventoryQue
             AccessPolicyService accessPolicyService,
             UserRepository userRepository,
             InventoryTaskAssignmentRepository assignmentRepository,
-            SparePartInventoryBranchAssignmentRepository branchAssignmentRepository
+            SparePartInventoryBranchAssignmentRepository branchAssignmentRepository,
+            InventoryTaskActivityService taskActivityService
     ) {
         this.inventoryTaskRepository = inventoryTaskRepository;
         this.itemRepository = itemRepository;
@@ -59,6 +63,7 @@ public class SparePartInventoryQueryServiceImpl implements SparePartInventoryQue
         this.userRepository = userRepository;
         this.assignmentRepository = assignmentRepository;
         this.branchAssignmentRepository = branchAssignmentRepository;
+        this.taskActivityService = taskActivityService;
     }
 
     @Override
@@ -159,10 +164,25 @@ public class SparePartInventoryQueryServiceImpl implements SparePartInventoryQue
                 taskBranchesById
         );
 
-        if (task.getStatus() != nextStatus) {
+        InventoryTaskStatus fromStatus = task.getStatus();
+        if (fromStatus != nextStatus) {
             task.setStatus(nextStatus);
             inventoryTaskRepository.save(task);
         }
+
+        int branchLinkCount = requestedBranchIdsByUserId.values().stream()
+                .mapToInt(List::size)
+                .sum();
+        taskActivityService.record(
+                task,
+                InventoryTaskActivityType.ASSIGNMENTS_UPDATED,
+                fromStatus,
+                nextStatus,
+                currentUser,
+                null,
+                "staff=" + requestedBranchIdsByUserId.size()
+                        + ", branchAssignments=" + branchLinkCount
+        );
 
         return savedAssignments.stream()
                 .map(assignment -> SparePartInventoryAssignmentResponse.from(

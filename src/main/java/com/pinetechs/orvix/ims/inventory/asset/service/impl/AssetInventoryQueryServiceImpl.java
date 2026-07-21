@@ -14,6 +14,8 @@ import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTaskAssignment;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskAssignmentRepository;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskRepository;
+import com.pinetechs.orvix.ims.inventory.task.enums.InventoryTaskActivityType;
+import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskActivityService;
 import com.pinetechs.orvix.ims.security.AccessPolicyService;
 import com.pinetechs.orvix.ims.user.entity.User;
 import com.pinetechs.orvix.ims.user.enums.UserType;
@@ -40,6 +42,7 @@ public class AssetInventoryQueryServiceImpl implements AssetInventoryQueryServic
     private final UserRepository userRepository;
     private final InventoryTaskAssignmentRepository assignmentRepository;
     private final AssetInventoryLocationAssignmentRepository locationAssignmentRepository;
+    private final InventoryTaskActivityService taskActivityService;
 
     public AssetInventoryQueryServiceImpl(
             InventoryTaskRepository inventoryTaskRepository,
@@ -51,7 +54,8 @@ public class AssetInventoryQueryServiceImpl implements AssetInventoryQueryServic
             AccessPolicyService accessPolicyService,
             UserRepository userRepository,
             InventoryTaskAssignmentRepository assignmentRepository,
-            AssetInventoryLocationAssignmentRepository locationAssignmentRepository
+            AssetInventoryLocationAssignmentRepository locationAssignmentRepository,
+            InventoryTaskActivityService taskActivityService
     ) {
         this.inventoryTaskRepository = inventoryTaskRepository;
         this.itemRepository = itemRepository;
@@ -63,6 +67,7 @@ public class AssetInventoryQueryServiceImpl implements AssetInventoryQueryServic
         this.userRepository = userRepository;
         this.assignmentRepository = assignmentRepository;
         this.locationAssignmentRepository = locationAssignmentRepository;
+        this.taskActivityService = taskActivityService;
     }
 
     @Override
@@ -191,10 +196,25 @@ public class AssetInventoryQueryServiceImpl implements AssetInventoryQueryServic
                 taskLocationsById
         );
 
-        if (task.getStatus() != nextStatus) {
+        InventoryTaskStatus fromStatus = task.getStatus();
+        if (fromStatus != nextStatus) {
             task.setStatus(nextStatus);
             inventoryTaskRepository.save(task);
         }
+
+        int locationLinkCount = requestedLocationIdsByUserId.values().stream()
+                .mapToInt(List::size)
+                .sum();
+        taskActivityService.record(
+                task,
+                InventoryTaskActivityType.ASSIGNMENTS_UPDATED,
+                fromStatus,
+                nextStatus,
+                currentUser,
+                null,
+                "staff=" + requestedLocationIdsByUserId.size()
+                        + ", locationAssignments=" + locationLinkCount
+        );
 
         return savedAssignments.stream()
                 .map(assignment -> AssetInventoryAssignmentResponse.from(

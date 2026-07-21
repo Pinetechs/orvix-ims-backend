@@ -6,6 +6,8 @@ import com.pinetechs.orvix.ims.inventory.sparepart.repository.*;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskAssignmentRepository;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskRepository;
+import com.pinetechs.orvix.ims.inventory.task.enums.InventoryTaskActivityType;
+import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskActivityService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +27,7 @@ public class SparePartInventoryImportPersistenceService {
     private final SparePartInventoryBranchAssignmentRepository branchAssignmentRepository;
     private final SparePartInventoryScanRepository scanRepository;
     private final InventoryTaskAssignmentRepository assignmentRepository;
+    private final InventoryTaskActivityService taskActivityService;
 
     public SparePartInventoryImportPersistenceService(
             InventoryTaskRepository inventoryTaskRepository,
@@ -35,7 +38,8 @@ public class SparePartInventoryImportPersistenceService {
             SparePartInventoryBrandRepository brandRepository,
             SparePartInventoryBranchAssignmentRepository branchAssignmentRepository,
             SparePartInventoryScanRepository scanRepository,
-            InventoryTaskAssignmentRepository assignmentRepository
+            InventoryTaskAssignmentRepository assignmentRepository,
+            InventoryTaskActivityService taskActivityService
     ) {
         this.inventoryTaskRepository = inventoryTaskRepository;
         this.itemRepository = itemRepository;
@@ -46,14 +50,20 @@ public class SparePartInventoryImportPersistenceService {
         this.branchAssignmentRepository = branchAssignmentRepository;
         this.scanRepository = scanRepository;
         this.assignmentRepository = assignmentRepository;
+        this.taskActivityService = taskActivityService;
     }
 
     @Transactional
     public InventoryTask markImportInProgress(Long taskId) {
         InventoryTask task = inventoryTaskRepository.findById(taskId)
                 .orElseThrow(() -> new RuntimeException("Inventory task not found. taskId=" + taskId));
+        InventoryTaskStatus fromStatus = task.getStatus();
         task.setStatus(InventoryTaskStatus.IMPORT_IN_PROGRESS);
-        return inventoryTaskRepository.save(task);
+        InventoryTask savedTask = inventoryTaskRepository.save(task);
+        taskActivityService.record(savedTask, InventoryTaskActivityType.IMPORT_STARTED,
+                fromStatus, InventoryTaskStatus.IMPORT_IN_PROGRESS, null, null,
+                "jobId=" + savedTask.getImportJobId());
+        return savedTask;
     }
 
     @Transactional
@@ -62,8 +72,14 @@ public class SparePartInventoryImportPersistenceService {
             return;
         }
         inventoryTaskRepository.findById(taskId).ifPresent(task -> {
+            InventoryTaskStatus fromStatus = task.getStatus();
             task.setStatus(InventoryTaskStatus.IMPORT_FAILED);
             inventoryTaskRepository.save(task);
+            if (fromStatus != InventoryTaskStatus.IMPORT_FAILED) {
+                taskActivityService.record(task, InventoryTaskActivityType.IMPORT_FAILED,
+                        fromStatus, InventoryTaskStatus.IMPORT_FAILED, null, null,
+                        "jobId=" + task.getImportJobId());
+            }
         });
     }
 
@@ -108,8 +124,13 @@ public class SparePartInventoryImportPersistenceService {
         task.setTotalRecords(items.size());
         task.setProcessedRecords(0);
         task.setMatchedRecords(0);
+        InventoryTaskStatus fromStatus = task.getStatus();
         task.setStatus(InventoryTaskStatus.IMPORT_COMPLETED);
 
         inventoryTaskRepository.save(task);
+        taskActivityService.record(task, InventoryTaskActivityType.IMPORT_COMPLETED,
+                fromStatus, InventoryTaskStatus.IMPORT_COMPLETED, null, null,
+                "jobId=" + task.getImportJobId() + ", records=" + items.size()
+                        + ", branches=" + branches.size() + ", locations=" + locations.size());
     }
 }

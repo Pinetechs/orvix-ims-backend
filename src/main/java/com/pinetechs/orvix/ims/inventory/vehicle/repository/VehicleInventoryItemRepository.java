@@ -1,6 +1,8 @@
 package com.pinetechs.orvix.ims.inventory.vehicle.repository;
 
+import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.vehicle.entity.VehicleInventoryItem;
+import com.pinetechs.orvix.ims.inventory.vehicle.entity.VehicleInventoryScan;
 import com.pinetechs.orvix.ims.inventory.vehicle.enums.VehicleInventoryItemStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -11,6 +13,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.Lock;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -84,6 +87,11 @@ public interface VehicleInventoryItemRepository
     Page<VehicleInventoryItem> findByInventoryTaskIdOrderByIdAsc(Long taskId, Pageable pageable);
 
     Page<VehicleInventoryItem> findByInventoryTask_Id(Long id, Pageable pageable);
+
+    @Transactional
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update VehicleInventoryItem v set v.currentScan =null where v.inventoryTask.id =:taskId")
+    void removeScanItemByTaskId(@Param("taskId")Long taskId);
 
 
 

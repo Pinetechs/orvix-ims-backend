@@ -12,6 +12,8 @@ import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryTaskStatus;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskRepository;
+import com.pinetechs.orvix.ims.inventory.task.enums.InventoryTaskActivityType;
+import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskActivityService;
 import com.pinetechs.orvix.ims.jobs.entity.BackgroundJob;
 import com.pinetechs.orvix.ims.jobs.enums.JobStatus;
 import com.pinetechs.orvix.ims.jobs.enums.JobType;
@@ -37,19 +39,22 @@ public class AssetInventoryImportServiceImpl implements AssetInventoryImportServ
     private final AccessPolicyService accessPolicyService;
     private final UploadedFileService uploadedFileService;
     private final BackgroundJobRepository backgroundJobRepository;
+    private final InventoryTaskActivityService taskActivityService;
 
     public AssetInventoryImportServiceImpl(
             InventoryTaskRepository inventoryTaskRepository,
             AssetInventoryItemRepository itemRepository,
             AccessPolicyService accessPolicyService,
             UploadedFileService uploadedFileService,
-            BackgroundJobRepository backgroundJobRepository
+            BackgroundJobRepository backgroundJobRepository,
+            InventoryTaskActivityService taskActivityService
     ) {
         this.inventoryTaskRepository = inventoryTaskRepository;
         this.itemRepository = itemRepository;
         this.accessPolicyService = accessPolicyService;
         this.uploadedFileService = uploadedFileService;
         this.backgroundJobRepository = backgroundJobRepository;
+        this.taskActivityService = taskActivityService;
     }
 
     @Override
@@ -103,9 +108,19 @@ public class AssetInventoryImportServiceImpl implements AssetInventoryImportServ
 
             job = backgroundJobRepository.save(job);
 
+            InventoryTaskStatus fromStatus = task.getStatus();
             task.setStatus(InventoryTaskStatus.IMPORT_PENDING);
             task.setImportJobId(job.getId());
             inventoryTaskRepository.save(task);
+            taskActivityService.record(
+                    task,
+                    InventoryTaskActivityType.IMPORT_QUEUED,
+                    fromStatus,
+                    InventoryTaskStatus.IMPORT_PENDING,
+                    currentUser,
+                    null,
+                    "jobId=" + job.getId() + ", file=" + uploadedFile.getOriginalFileName()
+            );
 
             UploadExcelResponse response = new UploadExcelResponse();
             response.setJobId(job.getId());

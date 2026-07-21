@@ -14,15 +14,14 @@ import com.pinetechs.orvix.ims.inventory.asset.enums.AssetInventoryScanResult;
 import com.pinetechs.orvix.ims.inventory.asset.repository.*;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryScanEventType;
-import com.pinetechs.orvix.ims.inventory.common.enums.InventoryTaskStatus;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskRepository;
+import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskActivityService;
 import com.pinetechs.orvix.ims.user.entity.User;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -40,6 +39,7 @@ public class AppAssetScanService {
     private final AssetInventoryLocationAssignmentRepository assignmentRepository;
     private final AssetInventoryScanRepository scanRepository;
     private final InventoryTaskRepository taskRepository;
+    private final InventoryTaskActivityService taskActivityService;
     private final UploadedFileService uploadedFileService;
 
     public AppAssetScanService(
@@ -51,6 +51,7 @@ public class AppAssetScanService {
             AssetInventoryLocationAssignmentRepository assignmentRepository,
             AssetInventoryScanRepository scanRepository,
             InventoryTaskRepository taskRepository,
+            InventoryTaskActivityService taskActivityService,
             UploadedFileService uploadedFileService
     ) {
         this.support = support;
@@ -61,6 +62,7 @@ public class AppAssetScanService {
         this.assignmentRepository = assignmentRepository;
         this.scanRepository = scanRepository;
         this.taskRepository = taskRepository;
+        this.taskActivityService = taskActivityService;
         this.uploadedFileService = uploadedFileService;
     }
 
@@ -84,7 +86,7 @@ public class AppAssetScanService {
             scan.setScanResult(AssetInventoryScanResult.EXTRA);
             setActual(scan, actual);
             scan = scanRepository.saveAndFlush(scan);
-            startTask(taskId);
+            startTask(task, user);
             return response(scan, null, "EXTRA", "scan.recorded_for_review", List.of(), true, false);
         }
 
@@ -112,7 +114,7 @@ public class AppAssetScanService {
         itemRepository.save(item);
         taskRepository.adjustScanCounters(taskId, 1, matched ? 1 : 0);
         locationRepository.adjustScanCounters(item.getPlannedLocation().getId(), 1, matched ? 1 : 0);
-        startTask(taskId);
+        startTask(task, user);
         return response(scan, item, matched ? "MATCHED" : "LOCATION_MISMATCH",
                 matched ? "scan.matched" : "scan.location_mismatch", mismatches, true, !matched);
     }
@@ -254,9 +256,8 @@ public class AppAssetScanService {
         return image == null ? null : uploadedFileService.markAsAttached(image.getId());
     }
 
-    private void startTask(Long taskId) {
-        taskRepository.markInProgressOnFirstScan(taskId, LocalDate.now(),
-                InventoryTaskStatus.READY_TO_START, InventoryTaskStatus.IN_PROGRESS);
+    private void startTask(InventoryTask task, User user) {
+        taskActivityService.startOnFirstScan(task, user);
     }
 
     private AppScanResponse replayResponse(AssetInventoryScan scan, String payloadHash) {

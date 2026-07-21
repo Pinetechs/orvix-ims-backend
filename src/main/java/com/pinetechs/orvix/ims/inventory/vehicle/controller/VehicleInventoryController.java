@@ -81,5 +81,14 @@ public class VehicleInventoryController {
         return vehicleInventoryImportService.uploadExcel(taskId, file, helper.currentUser(authentication));
     }
 
+    @PostMapping("/{taskId}/scan")
+    @Deprecated
+    public void legacyScan(@PathVariable Long taskId, @RequestBody(required = false) Object ignored) {
+        throw new com.pinetechs.orvix.ims.common.exception.BusinessException(
+                org.springframework.http.HttpStatus.GONE,
+                "Legacy scan endpoint was retired; use /api/app/v1/tasks/{taskId}/scans"
+        );
+    }
+
 
 }

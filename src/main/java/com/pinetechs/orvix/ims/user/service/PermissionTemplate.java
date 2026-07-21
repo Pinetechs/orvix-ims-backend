@@ -86,6 +86,9 @@ public final class PermissionTemplate {
 
     private static Set<PermissionCode> companyAdminReportOnlyPermissions() {
         return new HashSet<>(EnumSet.of(
+                PermissionCode.VEHICLE_TASK_VIEW,
+                PermissionCode.ASSET_TASK_VIEW,
+                PermissionCode.SPARE_PART_TASK_VIEW,
                 PermissionCode.VEHICLE_REPORT_VIEW,
                 PermissionCode.ASSET_REPORT_VIEW,
                 PermissionCode.SPARE_PART_REPORT_VIEW

@@ -11,6 +11,8 @@ public interface CompanyRepository extends JpaRepository<Company, Long> , JpaSpe
     boolean existsByCodeIgnoreCase(String code);
     Optional<Company> findByCodeIgnoreCase(String code);
 
+    long countByActiveTrue();
+
 
 
 }

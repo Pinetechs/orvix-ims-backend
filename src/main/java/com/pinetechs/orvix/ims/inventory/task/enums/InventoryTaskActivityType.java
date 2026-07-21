@@ -1,0 +1,20 @@
+package com.pinetechs.orvix.ims.inventory.task.enums;
+
+public enum InventoryTaskActivityType {
+    TASK_CREATED,
+    IMPORT_QUEUED,
+    IMPORT_STARTED,
+    IMPORT_COMPLETED,
+    IMPORT_FAILED,
+    ASSIGNMENTS_UPDATED,
+    MARKED_READY,
+    TASK_STARTED,
+    TASK_STARTED_BY_FIRST_SCAN,
+    TASK_PAUSED,
+    TASK_RESUMED,
+    SUBMITTED_FOR_REVIEW,
+    RETURNED_TO_PROGRESS,
+    TASK_COMPLETED,
+    TASK_CANCELLED,
+    SCAN_SETTINGS_UPDATED
+}

@@ -17,6 +17,7 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 public interface InventoryTaskRepository extends JpaRepository<InventoryTask, Long>, JpaSpecificationExecutor<InventoryTask> {
 
@@ -59,13 +60,15 @@ public interface InventoryTaskRepository extends JpaRepository<InventoryTask, Lo
     @Query("""
            update InventoryTask task
               set task.status = :inProgress,
-                  task.startDate = coalesce(task.startDate, :startDate)
+                  task.startDate = coalesce(task.startDate, :startDate),
+                  task.startedAt = coalesce(task.startedAt, :startedAt)
             where task.id = :taskId
               and task.status = :readyToStart
            """)
     int markInProgressOnFirstScan(
             @Param("taskId") Long taskId,
             @Param("startDate") LocalDate startDate,
+            @Param("startedAt") LocalDateTime startedAt,
             @Param("readyToStart") InventoryTaskStatus readyToStart,
             @Param("inProgress") InventoryTaskStatus inProgress
     );

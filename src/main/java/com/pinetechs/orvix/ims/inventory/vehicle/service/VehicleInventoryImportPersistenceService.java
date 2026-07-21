@@ -3,6 +3,8 @@ package com.pinetechs.orvix.ims.inventory.vehicle.service;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryTaskStatus;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskRepository;
+import com.pinetechs.orvix.ims.inventory.task.enums.InventoryTaskActivityType;
+import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskActivityService;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskAssignmentRepository;
 import com.pinetechs.orvix.ims.inventory.vehicle.entity.VehicleInventoryItem;
 import com.pinetechs.orvix.ims.inventory.vehicle.entity.VehicleInventoryLocation;
@@ -26,19 +28,22 @@ public class VehicleInventoryImportPersistenceService {
     private final VehicleInventoryItemJdbcRepository itemJdbcRepository;
     private final InventoryTaskAssignmentRepository assignmentRepository;
     private final VehicleInventoryLocationAssignmentRepository locationAssignmentRepository;
+    private final InventoryTaskActivityService taskActivityService;
 
     public VehicleInventoryImportPersistenceService(InventoryTaskRepository inventoryTaskRepository,
                                                     VehicleInventoryItemRepository itemRepository,
                                                     VehicleInventoryLocationRepository locationRepository,
                                                     VehicleInventoryItemJdbcRepository itemJdbcRepository,
                                                     InventoryTaskAssignmentRepository assignmentRepository,
-                                                    VehicleInventoryLocationAssignmentRepository locationAssignmentRepository) {
+                                                    VehicleInventoryLocationAssignmentRepository locationAssignmentRepository,
+                                                    InventoryTaskActivityService taskActivityService) {
         this.inventoryTaskRepository = inventoryTaskRepository;
         this.itemRepository = itemRepository;
         this.locationRepository = locationRepository;
         this.itemJdbcRepository = itemJdbcRepository;
         this.assignmentRepository = assignmentRepository;
         this.locationAssignmentRepository = locationAssignmentRepository;
+        this.taskActivityService = taskActivityService;
     }
 
     @Transactional
@@ -46,9 +51,14 @@ public class VehicleInventoryImportPersistenceService {
         InventoryTask task = inventoryTaskRepository.findById(taskId)
                 .orElseThrow(() -> new RuntimeException("Inventory task not found. taskId=" + taskId));
 
+        InventoryTaskStatus fromStatus = task.getStatus();
         task.setStatus(InventoryTaskStatus.IMPORT_IN_PROGRESS);
 
-        return inventoryTaskRepository.save(task);
+        InventoryTask savedTask = inventoryTaskRepository.save(task);
+        taskActivityService.record(savedTask, InventoryTaskActivityType.IMPORT_STARTED,
+                fromStatus, InventoryTaskStatus.IMPORT_IN_PROGRESS, null, null,
+                "jobId=" + savedTask.getImportJobId());
+        return savedTask;
     }
 
     @Transactional
@@ -58,8 +68,14 @@ public class VehicleInventoryImportPersistenceService {
         }
 
         inventoryTaskRepository.findById(taskId).ifPresent(task -> {
+            InventoryTaskStatus fromStatus = task.getStatus();
             task.setStatus(InventoryTaskStatus.IMPORT_FAILED);
             inventoryTaskRepository.save(task);
+            if (fromStatus != InventoryTaskStatus.IMPORT_FAILED) {
+                taskActivityService.record(task, InventoryTaskActivityType.IMPORT_FAILED,
+                        fromStatus, InventoryTaskStatus.IMPORT_FAILED, null, null,
+                        "jobId=" + task.getImportJobId());
+            }
         });
     }
 
@@ -87,8 +103,13 @@ public class VehicleInventoryImportPersistenceService {
         task.setProcessedRecords(0);
         task.setMatchedRecords(0);
 
+        InventoryTaskStatus fromStatus = task.getStatus();
         task.setStatus(InventoryTaskStatus.IMPORT_COMPLETED);
 
         inventoryTaskRepository.save(task);
+        taskActivityService.record(task, InventoryTaskActivityType.IMPORT_COMPLETED,
+                fromStatus, InventoryTaskStatus.IMPORT_COMPLETED, null, null,
+                "jobId=" + task.getImportJobId() + ", records=" + items.size()
+                        + ", locations=" + locations.size());
     }
 }

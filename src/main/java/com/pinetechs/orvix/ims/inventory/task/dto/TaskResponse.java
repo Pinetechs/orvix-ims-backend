@@ -32,6 +32,8 @@ public class TaskResponse {
     private SparePartLocationProgressMode sparePartLocationProgressMode;
     private long scanCount;
     private LocalDateTime pausedAt;
+    private LocalDateTime startedAt;
+    private LocalDateTime reviewStartedAt;
     private String pauseReason;
     private String cancelReason;
     private Long pausedByUserId;
@@ -42,6 +44,12 @@ public class TaskResponse {
 
 
     public static TaskResponse from(InventoryTask task, long scanCount) {
+        TaskResponse response = from(task, scanCount, null);
+        response.setAllowedActions(TaskAllowedActionsResponse.from(task.getStatus(), scanCount));
+        return response;
+    }
+
+    public static TaskResponse from(InventoryTask task, long scanCount, User viewer) {
         TaskResponse response = new TaskResponse();
 
         response.setId(task.getId() == null ? null : task.getId().toString());
@@ -63,13 +71,16 @@ public class TaskResponse {
         response.setSparePartLocationProgressMode(task.getSparePartLocationProgressMode());
         response.setScanCount(scanCount);
         response.setPausedAt(task.getPausedAt());
+        response.setStartedAt(task.getStartedAt());
+        response.setReviewStartedAt(task.getReviewStartedAt());
         response.setPauseReason(task.getPauseReason());
         response.setCancelReason(task.getCancelReason());
         response.setPausedByUserId(task.getPausedBy() == null ? null : task.getPausedBy().getId());
         response.setPausedBy(userDisplayName(task.getPausedBy()));
         response.setCancelledByUserId(task.getCancelledBy() == null ? null : task.getCancelledBy().getId());
         response.setCancelledBy(userDisplayName(task.getCancelledBy()));
-        response.setAllowedActions(TaskAllowedActionsResponse.from(task.getStatus(), scanCount));
+        response.setAllowedActions(TaskAllowedActionsResponse.from(
+                task.getStatus(), task.getInventoryDomain(), scanCount, viewer));
         User createdBy = task.getCreatedBy();
         if (createdBy != null) {
             String fullName = createdBy.getFullName();
@@ -174,6 +185,10 @@ public class TaskResponse {
     public void setScanCount(long scanCount) { this.scanCount = scanCount; }
     public LocalDateTime getPausedAt() { return pausedAt; }
     public void setPausedAt(LocalDateTime pausedAt) { this.pausedAt = pausedAt; }
+    public LocalDateTime getStartedAt() { return startedAt; }
+    public void setStartedAt(LocalDateTime startedAt) { this.startedAt = startedAt; }
+    public LocalDateTime getReviewStartedAt() { return reviewStartedAt; }
+    public void setReviewStartedAt(LocalDateTime reviewStartedAt) { this.reviewStartedAt = reviewStartedAt; }
     public String getPauseReason() { return pauseReason; }
     public void setPauseReason(String pauseReason) { this.pauseReason = pauseReason; }
     public String getCancelReason() { return cancelReason; }

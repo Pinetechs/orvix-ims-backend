@@ -144,6 +144,18 @@ public class InventoryTaskController {
         return inventoryTaskService.moveToReview(taskId, helper.currentUser(authentication));
     }
 
+    @PostMapping("/{taskId}/return-to-progress")
+    public TaskResponse returnToProgress(
+            @PathVariable Long taskId,
+            @RequestBody(required = false) InventoryTaskReasonRequest request,
+            @RequestParam(required = false) String reason,
+            Authentication authentication
+    ) {
+        String resolvedReason = request == null ? reason : request.getReason();
+        return inventoryTaskService.returnToProgress(
+                taskId, resolvedReason, helper.currentUser(authentication));
+    }
+
     @PostMapping("/{taskId}/complete")
     public TaskResponse completeTask(@PathVariable Long taskId, Authentication authentication) {
         return inventoryTaskService.completeTask(taskId, helper.currentUser(authentication));

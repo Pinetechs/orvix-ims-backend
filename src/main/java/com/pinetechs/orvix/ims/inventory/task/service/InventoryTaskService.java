@@ -26,6 +26,8 @@ public interface InventoryTaskService {
 
         TaskResponse moveToReview(Long taskId, User currentUser);
 
+        TaskResponse returnToProgress(Long taskId, String reason, User currentUser);
+
         TaskResponse completeTask(Long taskId, User currentUser);
 
         TaskResponse cancelTask(Long taskId, String cancelReason, User currentUser);

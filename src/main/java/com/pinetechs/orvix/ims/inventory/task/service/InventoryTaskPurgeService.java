@@ -7,6 +7,7 @@ import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.inventory.sparepart.repository.*;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskAssignmentRepository;
+import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskActivityRepository;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskRepository;
 import com.pinetechs.orvix.ims.inventory.vehicle.repository.*;
 import com.pinetechs.orvix.ims.jobs.entity.BackgroundJob;
@@ -27,6 +28,7 @@ public class InventoryTaskPurgeService {
 
     private final InventoryTaskRepository taskRepository;
     private final InventoryTaskAssignmentRepository taskAssignmentRepository;
+    private final InventoryTaskActivityRepository taskActivityRepository;
     private final VehicleInventoryScanRepository vehicleScanRepository;
     private final VehicleInventoryLocationAssignmentRepository vehicleAssignmentRepository;
     private final VehicleInventoryItemRepository vehicleItemRepository;
@@ -50,6 +52,7 @@ public class InventoryTaskPurgeService {
     public InventoryTaskPurgeService(
             InventoryTaskRepository taskRepository,
             InventoryTaskAssignmentRepository taskAssignmentRepository,
+            InventoryTaskActivityRepository taskActivityRepository,
             VehicleInventoryScanRepository vehicleScanRepository,
             VehicleInventoryLocationAssignmentRepository vehicleAssignmentRepository,
             VehicleInventoryItemRepository vehicleItemRepository,
@@ -72,6 +75,7 @@ public class InventoryTaskPurgeService {
     ) {
         this.taskRepository = taskRepository;
         this.taskAssignmentRepository = taskAssignmentRepository;
+        this.taskActivityRepository = taskActivityRepository;
         this.vehicleScanRepository = vehicleScanRepository;
         this.vehicleAssignmentRepository = vehicleAssignmentRepository;
         this.vehicleItemRepository = vehicleItemRepository;
@@ -107,8 +111,7 @@ public class InventoryTaskPurgeService {
 
     /** Must be called after locking and re-validating the task in the caller transaction. */
     @Transactional
-    public void purge(InventoryTask task) {
-        Long taskId = task.getId();
+    public void purge(InventoryTask task) {Long taskId = task.getId();
         List<BackgroundJob> jobs = backgroundJobRepository.findByRelatedIdForUpdate(taskId);
         if (jobs.stream().anyMatch(job -> job.getStatus() == JobStatus.RUNNING)) {
             throw new BusinessException(HttpStatus.CONFLICT,
@@ -118,6 +121,10 @@ public class InventoryTaskPurgeService {
         Set<Long> scanImageIds = new LinkedHashSet<>();
         if (task.getInventoryDomain() == InventoryDomain.VEHICLE) {
             scanImageIds.addAll(vehicleScanRepository.findScanImageIdsByTaskId(taskId));
+            vehicleItemRepository.removeScanItemByTaskId(taskId);
+            vehicleScanRepository.removeItemsByTaskId(taskId);
+
+
             vehicleScanRepository.deleteByTaskId(taskId);
             vehicleAssignmentRepository.deleteByTaskId(taskId);
             taskAssignmentRepository.deleteByInventoryTaskId(taskId);
@@ -125,6 +132,10 @@ public class InventoryTaskPurgeService {
             vehicleLocationRepository.deleteByTaskId(taskId);
         } else if (task.getInventoryDomain() == InventoryDomain.ASSET) {
             scanImageIds.addAll(assetScanRepository.findScanImageIdsByTaskId(taskId));
+
+            assetItemRepository.removeScanItemByTaskId(taskId);
+            assetScanRepository.removeItemsByTaskId(taskId);
+
             assetScanRepository.deleteByTaskId(taskId);
             assetAssignmentRepository.deleteByTaskId(taskId);
             taskAssignmentRepository.deleteByInventoryTaskId(taskId);
@@ -149,6 +160,7 @@ public class InventoryTaskPurgeService {
 
         scanImageIds.forEach(uploadedFileService::markForCleanup);
         backgroundJobRepository.deleteAll(jobs);
+        taskActivityRepository.deleteByInventoryTaskId(taskId);
         taskRepository.deleteById(taskId);
         taskRepository.flush();
     }

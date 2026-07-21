@@ -242,10 +242,14 @@ public class UserManagementService {
             if (user.getAccessChannel() != AccessChannel.WEB) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Company admin must use web channel");
             }
-            if (!user.hasPermission(PermissionCode.VEHICLE_REPORT_VIEW)
+            if (!user.hasPermission(PermissionCode.VEHICLE_TASK_VIEW)
+                    || !user.hasPermission(PermissionCode.ASSET_TASK_VIEW)
+                    || !user.hasPermission(PermissionCode.SPARE_PART_TASK_VIEW)
+                    || !user.hasPermission(PermissionCode.VEHICLE_REPORT_VIEW)
                     || !user.hasPermission(PermissionCode.ASSET_REPORT_VIEW)
                     || !user.hasPermission(PermissionCode.SPARE_PART_REPORT_VIEW)) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Company admin must have report-only permissions for all inventory domains");
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Company admin must have read-only task and report permissions for all inventory domains");
             }
         }
         if (user.isSupervisor()) {

@@ -62,6 +62,10 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     boolean existsByUserTypeAndDeletedFalse(UserType userType);
 
+    long countByDeletedFalse();
+
+    long countByDeletedFalseAndEnabledTrue();
+
     @Query("""
         select distinct u
         from User u
