@@ -14,6 +14,7 @@ public class InventoryTrackingProviderRegistry {
 
     public InventoryTrackingProviderRegistry(List<InventoryTrackingProvider> providerList) {
         Map<InventoryDomain, InventoryTrackingProvider> registered = new EnumMap<>(InventoryDomain.class);
+
         for (InventoryTrackingProvider provider : providerList) {
             InventoryTrackingProvider previous = registered.put(provider.domain(), provider);
             if (previous != null) {

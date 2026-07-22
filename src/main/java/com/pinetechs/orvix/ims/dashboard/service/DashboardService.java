@@ -6,6 +6,8 @@ import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryTaskStatus;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.tracking.dto.TrackingResponses;
+import com.pinetechs.orvix.ims.inventory.tracking.dto.TrackingSnapshot;
+import com.pinetechs.orvix.ims.inventory.tracking.policy.TrackingStatusPolicy;
 import com.pinetechs.orvix.ims.inventory.tracking.service.InventoryTrackingService;
 import com.pinetechs.orvix.ims.inventory.tracking.service.TrackingTaskScopeService;
 import com.pinetechs.orvix.ims.user.entity.User;
@@ -42,17 +44,20 @@ public class DashboardService {
     private final InventoryTrackingService trackingService;
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
+    private final TrackingStatusPolicy trackingStatusPolicy;
 
     public DashboardService(
             TrackingTaskScopeService taskScopeService,
             InventoryTrackingService trackingService,
             CompanyRepository companyRepository,
-            UserRepository userRepository
+            UserRepository userRepository,
+            TrackingStatusPolicy trackingStatusPolicy
     ) {
         this.taskScopeService = taskScopeService;
         this.trackingService = trackingService;
         this.companyRepository = companyRepository;
         this.userRepository = userRepository;
+        this.trackingStatusPolicy = trackingStatusPolicy;
     }
 
     @Transactional(readOnly = true)
@@ -77,7 +82,7 @@ public class DashboardService {
                 ACTIVE_STATUSES,
                 Sort.by(Sort.Direction.DESC, "updatedAt")
         );
-        Map<Long, InventoryTrackingService.TaskSnapshot> snapshots = trackingService.snapshots(activeTasks);
+        Map<Long, TrackingSnapshot> snapshots = trackingService.snapshots(activeTasks);
 
         long expected = 0;
         long processed = 0;
@@ -93,7 +98,7 @@ public class DashboardService {
 
         Map<InventoryDomain, DomainAccumulator> domains = new EnumMap<>(InventoryDomain.class);
         for (InventoryTask task : activeTasks) {
-            InventoryTrackingService.TaskSnapshot snapshot = snapshots.get(task.getId());
+            TrackingSnapshot snapshot = snapshots.get(task.getId());
             TrackingResponses.CurrentMetrics current = snapshot.current();
             TrackingResponses.EventMetrics events = snapshot.events();
             expected += current.totalExpected();
@@ -103,11 +108,9 @@ public class DashboardService {
 
             long missingImages = task.isScanImageRequired() ? current.acceptedWithoutImage() : 0;
             boolean importFailed = task.getStatus() == InventoryTaskStatus.IMPORT_FAILED;
-            boolean stalled = isStalled(task, events);
-            boolean readyForReview = task.getStatus() == InventoryTaskStatus.IN_PROGRESS
-                    && current.totalExpected() > 0
-                    && current.remaining() == 0;
-            boolean highDuplicateRate = isHighDuplicateRate(events);
+            boolean stalled = trackingStatusPolicy.isTaskStalled(task, events);
+            boolean readyForReview = trackingStatusPolicy.isReadyForReview(task, current);
+            boolean highDuplicateRate = trackingStatusPolicy.isHighDuplicateRate(events);
             long issues = current.mismatched() + missingImages + events.extraEvents()
                     + events.conflicts() + current.acceptedWithNotes();
             if (importFailed) {
@@ -181,17 +184,6 @@ public class DashboardService {
 
     private long countStatus(List<InventoryTask> tasks, InventoryTaskStatus status) {
         return tasks.stream().filter(task -> task.getStatus() == status).count();
-    }
-
-    private boolean isStalled(InventoryTask task, TrackingResponses.EventMetrics events) {
-        if (task.getStatus() != InventoryTaskStatus.IN_PROGRESS) return false;
-        LocalDateTime reference = events.lastActivityAt() == null ? task.getStartedAt() : events.lastActivityAt();
-        return reference != null && reference.isBefore(LocalDateTime.now().minusMinutes(30));
-    }
-
-    private boolean isHighDuplicateRate(TrackingResponses.EventMetrics events) {
-        return events.totalEvents() >= 20
-                && events.duplicates() * 100.0 / events.totalEvents() >= 20.0;
     }
 
     private int percentage(long value, long total) {

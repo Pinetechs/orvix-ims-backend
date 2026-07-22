@@ -21,7 +21,7 @@ import com.pinetechs.orvix.ims.inventory.sparepart.repository.SparePartInventory
 import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskService;
 import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskActivityService;
 import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskPurgeService;
-import com.pinetechs.orvix.ims.inventory.tracking.repository.TrackingJdbcRepository;
+import com.pinetechs.orvix.ims.inventory.tracking.provider.InventoryTrackingProviderRegistry;
 import com.pinetechs.orvix.ims.security.AccessPolicyService;
 import com.pinetechs.orvix.ims.user.entity.User;
 import com.pinetechs.orvix.ims.user.enums.PermissionCode;
@@ -59,7 +59,7 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
     private final SparePartInventoryBranchRepository spareBranchRepository;
     private final SparePartInventoryBranchAssignmentRepository spareBranchAssignmentRepository;
     private final InventoryTaskActivityService taskActivityService;
-    private final TrackingJdbcRepository trackingJdbcRepository;
+    private final InventoryTrackingProviderRegistry trackingProviderRegistry;
 
 
     public InventoryTaskServiceImpl(
@@ -75,7 +75,7 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
             SparePartInventoryBranchRepository spareBranchRepository,
             SparePartInventoryBranchAssignmentRepository spareBranchAssignmentRepository,
             InventoryTaskActivityService taskActivityService,
-            TrackingJdbcRepository trackingJdbcRepository,
+            InventoryTrackingProviderRegistry trackingProviderRegistry,
             InventoryTaskPurgeService purgeService) {
         this.inventoryTaskRepository = inventoryTaskRepository;
         this.companyRepository = companyRepository;
@@ -89,7 +89,7 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
         this.spareBranchRepository = spareBranchRepository;
         this.spareBranchAssignmentRepository = spareBranchAssignmentRepository;
         this.taskActivityService = taskActivityService;
-        this.trackingJdbcRepository = trackingJdbcRepository;
+        this.trackingProviderRegistry = trackingProviderRegistry;
         this.purgeService = purgeService;
     }
 
@@ -778,7 +778,7 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
                         Collectors.mapping(InventoryTask::getId, Collectors.toList())
                 ));
         taskIdsByDomain.forEach((domain, taskIds) ->
-                trackingJdbcRepository.findEventMetrics(domain, taskIds)
+                trackingProviderRegistry.get(domain).eventMetrics(taskIds)
                         .forEach((taskId, metrics) -> counts.put(taskId, metrics.totalEvents())));
         return counts;
     }

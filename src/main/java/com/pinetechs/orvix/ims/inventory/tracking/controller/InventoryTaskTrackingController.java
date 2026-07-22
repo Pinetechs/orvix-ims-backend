@@ -94,10 +94,7 @@ public class InventoryTaskTrackingController {
     }
 
     @GetMapping("/{taskId}/attention")
-    public TrackingResponses.Attention getAttention(
-            @PathVariable Long taskId,
-            Authentication authentication
-    ) {
+    public TrackingResponses.Attention getAttention(@PathVariable Long taskId, Authentication authentication) {
         return trackingService.attention(taskId, helper.currentUser(authentication));
     }
 
