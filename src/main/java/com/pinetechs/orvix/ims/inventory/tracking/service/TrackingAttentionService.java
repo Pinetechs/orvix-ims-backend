@@ -10,6 +10,7 @@ import com.pinetechs.orvix.ims.inventory.tracking.enums.TrackingAttentionType;
 import com.pinetechs.orvix.ims.inventory.tracking.enums.TrackingResultFilter;
 import com.pinetechs.orvix.ims.inventory.tracking.policy.TrackingStatusPolicy;
 import com.pinetechs.orvix.ims.inventory.tracking.provider.InventoryTrackingProvider;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
@@ -32,14 +33,16 @@ public class TrackingAttentionService {
 
     public TrackingResponses.Attention build(InventoryTask task, InventoryTrackingProvider provider, TrackingSnapshot snapshot) {
         List<TrackingResponses.Area> areas = provider.areas(task.getId(), task.getStatus());
+        OpenEventIssues openEvents = loadOpenEventIssues(task.getId(), provider);
 
-        AttentionFacts facts = calculateFacts(task, snapshot, areas);
+        AttentionFacts facts = calculateFacts(task, snapshot, areas, openEvents);
         List<TrackingResponses.AttentionItem> items = loadAttentionItems(
                 task,
                 provider,
                 snapshot,
                 areas,
-                facts
+                facts,
+                openEvents
         );
 
         return new TrackingResponses.Attention(
@@ -53,7 +56,8 @@ public class TrackingAttentionService {
     private AttentionFacts calculateFacts(
             InventoryTask task,
             TrackingSnapshot snapshot,
-            List<TrackingResponses.Area> areas
+            List<TrackingResponses.Area> areas,
+            OpenEventIssues openEvents
     ) {
         long stalledAreas = areas.stream()
                 .filter(area -> area.status() == TrackingAreaStatus.STALLED)
@@ -77,8 +81,9 @@ public class TrackingAttentionService {
 
         long totalIssues = snapshot.current().mismatched()
                 + missingImages
-                + snapshot.events().extraEvents()
-                + snapshot.events().conflicts()
+                + openEvents.extra().getTotalElements()
+                + openEvents.ambiguous().getTotalElements()
+                + openEvents.conflict().getTotalElements()
                 + snapshot.current().acceptedWithNotes()
                 + stalledAreas
                 + notStartedAreas
@@ -89,6 +94,9 @@ public class TrackingAttentionService {
         return new AttentionFacts(
                 totalIssues,
                 missingImages,
+                openEvents.extra().getTotalElements(),
+                openEvents.ambiguous().getTotalElements(),
+                openEvents.conflict().getTotalElements(),
                 stalledAreas,
                 notStartedAreas,
                 runningLongEnough,
@@ -98,7 +106,25 @@ public class TrackingAttentionService {
         );
     }
 
-    private List<TrackingResponses.AttentionItem> loadAttentionItems(InventoryTask task, InventoryTrackingProvider provider, TrackingSnapshot snapshot, List<TrackingResponses.Area> areas, AttentionFacts facts) {
+    private OpenEventIssues loadOpenEventIssues(Long taskId, InventoryTrackingProvider provider) {
+        return new OpenEventIssues(
+                provider.unresolvedScanEvents(
+                        taskId, InventoryScanEventType.EXTRA, PageRequest.of(0, 10)),
+                provider.unresolvedScanEvents(
+                        taskId, InventoryScanEventType.AMBIGUOUS, PageRequest.of(0, 10)),
+                provider.unresolvedScanEvents(
+                        taskId, InventoryScanEventType.CONFLICT, PageRequest.of(0, 10))
+        );
+    }
+
+    private List<TrackingResponses.AttentionItem> loadAttentionItems(
+            InventoryTask task,
+            InventoryTrackingProvider provider,
+            TrackingSnapshot snapshot,
+            List<TrackingResponses.Area> areas,
+            AttentionFacts facts,
+            OpenEventIssues openEvents
+    ) {
         List<TrackingResponses.AttentionItem> items = new ArrayList<>();
 
         appendResultItems(items, provider.results(
@@ -125,22 +151,17 @@ public class TrackingAttentionService {
 
         appendEventItems(
                 items,
-                provider.scanEvents(
-                        task.getId(),
-                        InventoryScanEventType.EXTRA,
-                        null,
-                        PageRequest.of(0, 10)
-                ).getContent(),
+                openEvents.extra().getContent(),
                 TrackingAttentionType.EXTRA
         );
         appendEventItems(
                 items,
-                provider.scanEvents(
-                        task.getId(),
-                        InventoryScanEventType.CONFLICT,
-                        null,
-                        PageRequest.of(0, 10)
-                ).getContent(),
+                openEvents.ambiguous().getContent(),
+                TrackingAttentionType.AMBIGUOUS
+        );
+        appendEventItems(
+                items,
+                openEvents.conflict().getContent(),
                 TrackingAttentionType.CONFLICT
         );
         appendResultItems(
@@ -317,9 +338,7 @@ public class TrackingAttentionService {
             target.add(new TrackingResponses.AttentionItem(
                     type + ":SCAN:" + event.scanId(),
                     type,
-                    type == TrackingAttentionType.EXTRA
-                            ? "Unexpected code was scanned"
-                            : "The code was scanned in a conflicting location",
+                    eventTitle(type),
                     event.details(),
                     event.itemId(),
                     event.scanId(),
@@ -332,6 +351,15 @@ public class TrackingAttentionService {
                     event.imageUrl()
             ));
         }
+    }
+
+    private String eventTitle(TrackingAttentionType type) {
+        return switch (type) {
+            case EXTRA -> "Unexpected code was scanned";
+            case AMBIGUOUS -> "The scanned code matches more than one expected item";
+            case CONFLICT -> "A later scan conflicts with the current accepted result";
+            default -> type.name();
+        };
     }
 
     private String resultTitle(TrackingAttentionType type) {
@@ -360,6 +388,9 @@ public class TrackingAttentionService {
     private record AttentionFacts(
             long totalIssues,
             long missingImages,
+            long openExtraEvents,
+            long openAmbiguousEvents,
+            long openConflicts,
             long stalledAreas,
             long notStartedAreas,
             boolean runningLongEnough,
@@ -372,9 +403,10 @@ public class TrackingAttentionService {
                     totalIssues,
                     snapshot.current().mismatched(),
                     missingImages,
-                    snapshot.events().extraEvents(),
+                    openExtraEvents,
                     snapshot.events().uniqueUnexpectedCodes(),
-                    snapshot.events().conflicts(),
+                    openAmbiguousEvents,
+                    openConflicts,
                     snapshot.current().acceptedWithNotes(),
                     stalledAreas,
                     notStartedAreas,
@@ -384,4 +416,10 @@ public class TrackingAttentionService {
             );
         }
     }
+
+    private record OpenEventIssues(
+            Page<TrackingResponses.ScanEvent> extra,
+            Page<TrackingResponses.ScanEvent> ambiguous,
+            Page<TrackingResponses.ScanEvent> conflict
+    ) {}
 }

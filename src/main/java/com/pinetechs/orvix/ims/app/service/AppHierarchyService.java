@@ -152,12 +152,6 @@ public class AppHierarchyService {
             throw new BusinessException(HttpStatus.CONFLICT,
                     "A location cannot be completed before its first scan");
         }
-        long openReviews = spareScanRepository.countOpenLocationReviews(taskId, locationId);
-        if (openReviews > 0L) {
-            throw new BusinessException(HttpStatus.CONFLICT,
-                    "Resolve location scan reviews before completing this location");
-        }
-
         if (!location.isCompleted()) {
             location.setCompleted(true);
             location.setCompletedAt(LocalDateTime.now());
@@ -224,7 +218,7 @@ public class AppHierarchyService {
                 progress == null ? null : progress.getLastScanAt(),
                 status,
                 detailed,
-                detailed && scanCount > 0L && reviewCount == 0L && !location.isCompleted(),
+                detailed && scanCount > 0L && !location.isCompleted(),
                 detailed && location.isCompleted() ? location.getCompletedAt() : null
         );
     }

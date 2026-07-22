@@ -99,9 +99,10 @@ public class AppAssetScanService {
                     : AssetInventoryScanResult.DUPLICATE_DIFFERENT_LOCATION);
             setExpectedAndActual(scan, item, actual, mismatches);
             scan = scanRepository.saveAndFlush(scan);
+            boolean correctionAllowed = !sameCanonicalPath && canCorrectCurrentScan(item, user);
             return response(scan, item, sameCanonicalPath ? "DUPLICATE" : "LOCATION_CONFLICT",
                     sameCanonicalPath ? "scan.duplicate" : "scan.location_conflict",
-                    mismatches, true, !sameCanonicalPath);
+                    mismatches, true, correctionAllowed);
         }
 
         boolean matched = mismatches.isEmpty();
@@ -247,9 +248,18 @@ public class AppAssetScanService {
         if (item.getCurrentScan() == null || !scanId.equals(item.getCurrentScan().getId())) {
             throw new BusinessException(HttpStatus.CONFLICT, "The scan is no longer the current accepted scan");
         }
-        if (scan.getScannedBy() == null || !user.getId().equals(scan.getScannedBy().getId())) {
+        if (!canCorrectCurrentScan(item, user)) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "Inventory staff can correct only their own scan");
         }
+    }
+
+    private boolean canCorrectCurrentScan(AssetInventoryItem item, User user) {
+        return item != null
+                && item.getCurrentScan() != null
+                && item.getCurrentScan().getScannedBy() != null
+                && user != null
+                && user.getId() != null
+                && user.getId().equals(item.getCurrentScan().getScannedBy().getId());
     }
 
     private UploadedFile attach(UploadedFile image) {
@@ -280,9 +290,10 @@ public class AppAssetScanService {
             case CORRECTION -> "scan.correction_recorded";
             default -> scan.getScanResult() == AssetInventoryScanResult.MATCHED ? "scan.matched" : "scan.location_mismatch";
         };
-        boolean correctionAllowed = scan.getEventType() == InventoryScanEventType.CONFLICT
-                || (scan.getEventType() == InventoryScanEventType.FIRST_SCAN
-                    && scan.getScanResult() == AssetInventoryScanResult.LOCATION_MISMATCH);
+        boolean correctionAllowed = canCorrectCurrentScan(scan.getItem(), scan.getScannedBy())
+                && (scan.getEventType() == InventoryScanEventType.CONFLICT
+                    || (scan.getEventType() == InventoryScanEventType.FIRST_SCAN
+                        && scan.getScanResult() == AssetInventoryScanResult.LOCATION_MISMATCH));
         AppScanResponse response = response(scan, scan.getItem(), result, message, fields, true, correctionAllowed);
         response.setIdempotentReplay(true);
         return response;

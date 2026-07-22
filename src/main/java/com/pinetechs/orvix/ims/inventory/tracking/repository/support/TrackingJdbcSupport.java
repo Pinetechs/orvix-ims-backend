@@ -6,12 +6,15 @@ import com.pinetechs.orvix.ims.inventory.tracking.enums.TrackingAreaLevel;
 import com.pinetechs.orvix.ims.inventory.tracking.policy.TrackingStatusPolicy;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Component
 public class TrackingJdbcSupport {
@@ -131,6 +134,23 @@ public class TrackingJdbcSupport {
 
     public static String normalizeSearch(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    /** Builds ORDER BY only from server-owned SQL column mappings. */
+    public static String orderBy(
+            Pageable pageable,
+            Map<String, String> allowedColumns,
+            String defaultOrder
+    ) {
+        if (pageable == null || pageable.getSort().isUnsorted()) {
+            return " order by " + defaultOrder;
+        }
+        Sort.Order requested = pageable.getSort().iterator().next();
+        String column = allowedColumns.get(requested.getProperty());
+        if (column == null) {
+            return " order by " + defaultOrder;
+        }
+        return " order by " + column + (requested.isAscending() ? " asc" : " desc");
     }
 
     public static BigDecimal decimal(BigDecimal value) {

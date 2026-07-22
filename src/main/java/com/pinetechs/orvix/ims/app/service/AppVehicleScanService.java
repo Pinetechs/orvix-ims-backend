@@ -105,10 +105,11 @@ public class AppVehicleScanService {
                     : VehicleInventoryScanResult.LOCATION_CONFLICT);
             fillExpectedAndActual(scan, item, actualLocation);
             scan = scanRepository.saveAndFlush(scan);
+            boolean correctionAllowed = !sameLocation && canCorrectCurrentScan(item, user);
             return response(scan, item,
                     sameLocation ? "DUPLICATE" : "LOCATION_CONFLICT",
                     sameLocation ? "scan.duplicate" : "scan.location_conflict",
-                    true, !sameLocation);
+                    true, correctionAllowed);
         }
 
         boolean matched = equalsIgnoreCase(item.getStoreNo(), actualLocation.getStoreNo());
@@ -267,9 +268,10 @@ public class AppVehicleScanService {
             case CORRECTION -> "scan.correction_recorded";
             default -> scan.getScanResult() == VehicleInventoryScanResult.FOUND ? "scan.matched" : "scan.location_mismatch";
         };
-        boolean correctionAllowed = scan.getEventType() == InventoryScanEventType.CONFLICT
-                || (scan.getEventType() == InventoryScanEventType.FIRST_SCAN
-                    && scan.getScanResult() == VehicleInventoryScanResult.WRONG_LOCATION);
+        boolean correctionAllowed = canCorrectCurrentScan(item, scan.getScannedBy())
+                && (scan.getEventType() == InventoryScanEventType.CONFLICT
+                    || (scan.getEventType() == InventoryScanEventType.FIRST_SCAN
+                        && scan.getScanResult() == VehicleInventoryScanResult.WRONG_LOCATION));
         AppScanResponse response = response(scan, item, result, message, true, correctionAllowed);
         response.setIdempotentReplay(true);
         return response;
@@ -333,6 +335,15 @@ public class AppVehicleScanService {
         String right = second == null ? "" : second.trim();
         String joined = (left + " " + right).trim();
         return joined.isEmpty() ? null : joined;
+    }
+
+    private boolean canCorrectCurrentScan(VehicleInventoryItem item, User user) {
+        return item != null
+                && item.getCurrentScan() != null
+                && item.getCurrentScan().getScannedBy() != null
+                && user != null
+                && user.getId() != null
+                && user.getId().equals(item.getCurrentScan().getScannedBy().getId());
     }
 
     private AppScanRequest correctionAsScanRequest(AppScanCorrectionRequest correction, String code) {

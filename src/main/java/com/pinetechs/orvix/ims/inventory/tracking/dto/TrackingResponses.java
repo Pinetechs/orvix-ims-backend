@@ -210,6 +210,7 @@ public final class TrackingResponses {
             long missingRequiredImages,
             long extraEvents,
             long uniqueUnexpectedCodes,
+            long ambiguousEvents,
             long conflicts,
             long staffNotes,
             long stalledAreas,

@@ -69,7 +69,7 @@ public class TrackingStatusPolicy {
         return switch (domain) {
             case VEHICLE -> area.level() == TrackingAreaLevel.STORE;
             case ASSET -> area.level() == TrackingAreaLevel.PLACE;
-            case SPARE_PART -> area.level() == TrackingAreaLevel.LOCATION;
+            case SPARE_PART -> area.level() == TrackingAreaLevel.BRANCH;
         };
     }
 

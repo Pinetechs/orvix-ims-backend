@@ -115,7 +115,8 @@ public class AppSparePartScanService {
             scan.setReviewRequired(!duplicate);
             scan = scanRepository.saveAndFlush(scan);
             reopenLocation(taskId, actual.location());
-            return response(scan, item, "ALREADY_COUNTED", "scan.already_counted", true, true);
+            boolean correctionAllowed = !duplicate && canCorrectCurrentScan(item, user);
+            return response(scan, item, "ALREADY_COUNTED", "scan.already_counted", true, correctionAllowed);
         }
 
         scan.setEventType(InventoryScanEventType.FIRST_SCAN);
@@ -317,9 +318,18 @@ public class AppSparePartScanService {
         if (item.getCurrentScan() == null || !scanId.equals(item.getCurrentScan().getId())) {
             throw new BusinessException(HttpStatus.CONFLICT, "The scan is no longer the current accepted scan");
         }
-        if (scan.getScannedBy() == null || !user.getId().equals(scan.getScannedBy().getId())) {
+        if (!canCorrectCurrentScan(item, user)) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "Inventory staff can correct only their own scan");
         }
+    }
+
+    private boolean canCorrectCurrentScan(SparePartInventoryItem item, User user) {
+        return item != null
+                && item.getCurrentScan() != null
+                && item.getCurrentScan().getScannedBy() != null
+                && user != null
+                && user.getId() != null
+                && user.getId().equals(item.getCurrentScan().getScannedBy().getId());
     }
 
     private UploadedFile attach(UploadedFile image) {
@@ -358,10 +368,10 @@ public class AppSparePartScanService {
             case CORRECTION -> "scan.correction_recorded";
             default -> "scan.recorded";
         };
-        boolean correctionAllowed = scan.getEventType() == InventoryScanEventType.CONFLICT
-                || scan.getEventType() == InventoryScanEventType.DUPLICATE
-                || (scan.getEventType() == InventoryScanEventType.FIRST_SCAN
-                    && scan.getLocationStatus() == SparePartInventoryLocationStatus.WRONG_LOCATION);
+        boolean correctionAllowed = canCorrectCurrentScan(scan.getItem(), scan.getScannedBy())
+                && (scan.getEventType() == InventoryScanEventType.CONFLICT
+                    || (scan.getEventType() == InventoryScanEventType.FIRST_SCAN
+                        && scan.getLocationStatus() == SparePartInventoryLocationStatus.WRONG_LOCATION));
         AppScanResponse response = response(scan, scan.getItem(), result, message, true, correctionAllowed);
         response.setIdempotentReplay(true);
         return response;

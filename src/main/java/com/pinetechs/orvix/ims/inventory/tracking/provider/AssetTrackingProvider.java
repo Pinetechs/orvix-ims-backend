@@ -33,6 +33,7 @@ import static com.pinetechs.orvix.ims.inventory.tracking.repository.support.Trac
 import static com.pinetechs.orvix.ims.inventory.tracking.repository.support.TrackingJdbcSupport.normalizeSearch;
 import static com.pinetechs.orvix.ims.inventory.tracking.repository.support.TrackingJdbcSupport.nullableLong;
 import static com.pinetechs.orvix.ims.inventory.tracking.repository.support.TrackingJdbcSupport.nullableUserRef;
+import static com.pinetechs.orvix.ims.inventory.tracking.repository.support.TrackingJdbcSupport.orderBy;
 import static com.pinetechs.orvix.ims.inventory.tracking.repository.support.TrackingJdbcSupport.percentage;
 import static com.pinetechs.orvix.ims.inventory.tracking.repository.support.TrackingJdbcSupport.userRef;
 
@@ -43,6 +44,17 @@ import static com.pinetechs.orvix.ims.inventory.tracking.repository.support.Trac
 public class AssetTrackingProvider implements InventoryTrackingProvider {
 
     private static final String SCAN_TABLE = "asset_inventory_scans";
+    private static final Map<String, String> RESULT_SORT_COLUMNS = Map.of(
+            "code", "code", "description", "description",
+            "expectedQuantity", "expected_quantity", "actualQuantity", "actual_quantity",
+            "varianceQuantity", "variance_quantity", "acceptedAt", "accepted_at"
+    );
+    private static final Map<String, String> EVENT_SORT_COLUMNS = Map.of(
+            "scannedCode", "scanned_code", "eventType", "event_type",
+            "result", "scan_result", "expectedQuantity", "expected_quantity",
+            "actualQuantity", "actual_quantity", "varianceQuantity", "variance_quantity",
+            "scannedAt", "scanned_at", "deviceId", "device_id"
+    );
 
     private final TrackingJdbcSupport support;
     private final NamedParameterJdbcTemplate jdbc;
@@ -459,7 +471,9 @@ public class AssetTrackingProvider implements InventoryTrackingProvider {
                        u.id as user_id, u.first_name, u.last_name, u.username, u.mobile,
                        i.checked_at as accepted_at, s.id as scan_id, (img.id is not null) as has_image,
                        coalesce(nullif(s.notes, ''), i.notes) as notes
-                """ + from + where + " order by i.id asc limit :limit offset :offset";
+                """ + from + where
+                + orderBy(pageable, RESULT_SORT_COLUMNS, "i.id asc")
+                + " limit :limit offset :offset";
 
         params.addValue("limit", pageable.getPageSize());
         params.addValue("offset", pageable.getOffset());
@@ -501,9 +515,30 @@ public class AssetTrackingProvider implements InventoryTrackingProvider {
             String search,
             Pageable pageable
     ) {
+        return findScanEvents(taskId, eventType, search, pageable, false);
+    }
+
+    @Override
+    public Page<TrackingResponses.ScanEvent> unresolvedScanEvents(
+            Long taskId,
+            InventoryScanEventType eventType,
+            Pageable pageable
+    ) {
+        requireAttentionEventType(eventType);
+        return findScanEvents(taskId, eventType, null, pageable, true);
+    }
+
+    private Page<TrackingResponses.ScanEvent> findScanEvents(
+            Long taskId,
+            InventoryScanEventType eventType,
+            String search,
+            Pageable pageable,
+            boolean unresolvedOnly
+    ) {
         String normalizedSearch = normalizeSearch(search);
         String where = " where s.task_id = :taskId "
                 + (eventType == null ? "" : " and s.event_type = :eventType ")
+                + unresolvedEventCondition(eventType, unresolvedOnly)
                 + (normalizedSearch == null ? "" : " and upper(s.scanned_barcode) like :search");
 
         MapSqlParameterSource params = new MapSqlParameterSource("taskId", taskId)
@@ -535,7 +570,8 @@ public class AssetTrackingProvider implements InventoryTrackingProvider {
                        s.scanned_at, s.device_scanned_at, s.device_id, s.symbology,
                        (img.id is not null) as has_image, s.notes, s.mismatch_fields as details
                 """ + from + where
-                + " order by s.scanned_at desc, s.id desc limit :limit offset :offset";
+                + orderBy(pageable, EVENT_SORT_COLUMNS, "s.scanned_at desc, s.id desc")
+                + " limit :limit offset :offset";
 
         params.addValue("limit", pageable.getPageSize());
         params.addValue("offset", pageable.getOffset());
@@ -572,6 +608,30 @@ public class AssetTrackingProvider implements InventoryTrackingProvider {
             );
         });
         return new PageImpl<>(content, pageable, total);
+    }
+
+    private String unresolvedEventCondition(InventoryScanEventType eventType, boolean unresolvedOnly) {
+        if (!unresolvedOnly || eventType != InventoryScanEventType.CONFLICT) {
+            return "";
+        }
+        return """
+                 and not exists (
+                       select 1 from asset_inventory_scans correction
+                        where correction.task_id = s.task_id
+                          and correction.item_id = s.item_id
+                          and correction.event_type = 'CORRECTION'
+                          and (correction.scanned_at > s.scanned_at
+                               or (correction.scanned_at = s.scanned_at and correction.id > s.id))
+                 )
+                """;
+    }
+
+    private void requireAttentionEventType(InventoryScanEventType eventType) {
+        if (eventType != InventoryScanEventType.EXTRA
+                && eventType != InventoryScanEventType.AMBIGUOUS
+                && eventType != InventoryScanEventType.CONFLICT) {
+            throw new IllegalArgumentException("Unsupported attention event type: " + eventType);
+        }
     }
 
     @Override

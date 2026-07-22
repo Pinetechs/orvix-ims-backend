@@ -38,5 +38,16 @@ public interface InventoryTrackingProvider {
             Pageable pageable
     );
 
+    /**
+     * Returns event-based issues that still need attention. Scan Events remains
+     * a complete audit log; this method deliberately excludes conflicts that
+     * were superseded by a later correction.
+     */
+    Page<TrackingResponses.ScanEvent> unresolvedScanEvents(
+            Long taskId,
+            InventoryScanEventType eventType,
+            Pageable pageable
+    );
+
     TrackingResponses.ImageFile image(Long taskId, Long scanId);
 }

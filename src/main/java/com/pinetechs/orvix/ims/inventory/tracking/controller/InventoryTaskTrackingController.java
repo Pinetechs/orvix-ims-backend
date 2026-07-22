@@ -32,12 +32,21 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/inventory/tracking/tasks")
 public class InventoryTaskTrackingController {
 
     private static final int MAX_PAGE_SIZE = 200;
+    private static final Set<String> RESULT_SORT_FIELDS = Set.of(
+            "code", "description", "expectedQuantity", "actualQuantity",
+            "varianceQuantity", "acceptedAt"
+    );
+    private static final Set<String> EVENT_SORT_FIELDS = Set.of(
+            "scannedCode", "eventType", "result", "expectedQuantity",
+            "actualQuantity", "varianceQuantity", "scannedAt", "deviceId"
+    );
 
     private final InventoryTaskTimelineService timelineService;
     private final InventoryTrackingService trackingService;
@@ -103,11 +112,14 @@ public class InventoryTaskTrackingController {
             @PathVariable Long taskId,
             @RequestParam(defaultValue = "ALL") TrackingResultFilter filter,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(defaultValue = "asc") String sortOrder,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size,
             Authentication authentication
     ) {
-        Pageable pageable = PageRequest.of(safePage(page), safeSize(size));
+        Pageable pageable = PageRequest.of(
+                safePage(page), safeSize(size), safeSort(sortBy, sortOrder, RESULT_SORT_FIELDS));
         return trackingService.results(
                 taskId, filter, search, pageable, helper.currentUser(authentication));
     }
@@ -117,11 +129,14 @@ public class InventoryTaskTrackingController {
             @PathVariable Long taskId,
             @RequestParam(required = false) InventoryScanEventType eventType,
             @RequestParam(required = false) String search,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(defaultValue = "asc") String sortOrder,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size,
             Authentication authentication
     ) {
-        Pageable pageable = PageRequest.of(safePage(page), safeSize(size));
+        Pageable pageable = PageRequest.of(
+                safePage(page), safeSize(size), safeSort(sortBy, sortOrder, EVENT_SORT_FIELDS));
         return trackingService.scanEvents(
                 taskId, eventType, search, pageable, helper.currentUser(authentication));
     }
@@ -181,5 +196,22 @@ public class InventoryTaskTrackingController {
 
     private int safeSize(int size) {
         return Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+    }
+
+    private Sort safeSort(String sortBy, String sortOrder, Set<String> allowedFields) {
+        if (sortBy == null || sortBy.isBlank()) {
+            return Sort.unsorted();
+        }
+        String field = sortBy.trim();
+        if (!allowedFields.contains(field)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST, "Unsupported sort field: " + field);
+        }
+        if ("asc".equalsIgnoreCase(sortOrder)) {
+            return Sort.by(Sort.Direction.ASC, field);
+        }
+        if ("desc".equalsIgnoreCase(sortOrder)) {
+            return Sort.by(Sort.Direction.DESC, field);
+        }
+        throw new BusinessException(HttpStatus.BAD_REQUEST, "sortOrder must be asc or desc");
     }
 }

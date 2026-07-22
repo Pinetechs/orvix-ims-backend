@@ -33,6 +33,7 @@ import static com.pinetechs.orvix.ims.inventory.tracking.repository.support.Trac
 import static com.pinetechs.orvix.ims.inventory.tracking.repository.support.TrackingJdbcSupport.normalizeSearch;
 import static com.pinetechs.orvix.ims.inventory.tracking.repository.support.TrackingJdbcSupport.nullableLong;
 import static com.pinetechs.orvix.ims.inventory.tracking.repository.support.TrackingJdbcSupport.nullableUserRef;
+import static com.pinetechs.orvix.ims.inventory.tracking.repository.support.TrackingJdbcSupport.orderBy;
 import static com.pinetechs.orvix.ims.inventory.tracking.repository.support.TrackingJdbcSupport.percentage;
 import static com.pinetechs.orvix.ims.inventory.tracking.repository.support.TrackingJdbcSupport.userRef;
 
@@ -43,6 +44,17 @@ import static com.pinetechs.orvix.ims.inventory.tracking.repository.support.Trac
 public class SparePartTrackingProvider implements InventoryTrackingProvider {
 
     private static final String SCAN_TABLE = "spare_part_inventory_scans";
+    private static final Map<String, String> RESULT_SORT_COLUMNS = Map.of(
+            "code", "code", "description", "description",
+            "expectedQuantity", "expected_quantity", "actualQuantity", "actual_quantity",
+            "varianceQuantity", "variance_quantity", "acceptedAt", "accepted_at"
+    );
+    private static final Map<String, String> EVENT_SORT_COLUMNS = Map.of(
+            "scannedCode", "scanned_code", "eventType", "event_type",
+            "result", "scan_result", "expectedQuantity", "expected_quantity",
+            "actualQuantity", "actual_quantity", "varianceQuantity", "variance_quantity",
+            "scannedAt", "scanned_at", "deviceId", "device_id"
+    );
 
     private final TrackingJdbcSupport support;
     private final NamedParameterJdbcTemplate jdbc;
@@ -165,7 +177,6 @@ public class SparePartTrackingProvider implements InventoryTrackingProvider {
         Map<Long, List<TrackingResponses.UserRef>> staff = assignedStaffByBranch(taskId);
 
         appendBranchAreas(areas, taskId, taskStatus, staff);
-       // appendLocationAreas(areas, taskId, taskStatus, staff);
 
         return areas;
     }
@@ -402,7 +413,9 @@ public class SparePartTrackingProvider implements InventoryTrackingProvider {
                        u.id as user_id, u.first_name, u.last_name, u.username, u.mobile,
                        i.counted_at as accepted_at, s.id as scan_id, (img.id is not null) as has_image,
                        coalesce(nullif(s.notes, ''), i.notes) as notes
-                """ + from + where + " order by i.id asc limit :limit offset :offset";
+                """ + from + where
+                + orderBy(pageable, RESULT_SORT_COLUMNS, "i.id asc")
+                + " limit :limit offset :offset";
 
         params.addValue("limit", pageable.getPageSize());
         params.addValue("offset", pageable.getOffset());
@@ -444,9 +457,32 @@ public class SparePartTrackingProvider implements InventoryTrackingProvider {
             String search,
             Pageable pageable
     ) {
+        return findScanEvents(taskId, eventType, search, pageable, false);
+    }
+
+    @Override
+    public Page<TrackingResponses.ScanEvent> unresolvedScanEvents(
+            Long taskId,
+            InventoryScanEventType eventType,
+            Pageable pageable
+    ) {
+        requireAttentionEventType(eventType);
+        return findScanEvents(taskId, eventType, null, pageable, true);
+    }
+
+    private Page<TrackingResponses.ScanEvent> findScanEvents(
+            Long taskId,
+            InventoryScanEventType eventType,
+            String search,
+            Pageable pageable,
+            boolean unresolvedOnly
+    ) {
         String normalizedSearch = normalizeSearch(search);
         String where = " where s.task_id = :taskId "
                 + (eventType == null ? "" : " and s.event_type = :eventType ")
+                + (unresolvedOnly
+                    ? " and s.review_required = true and s.review_resolved_at is null "
+                    : "")
                 + (normalizedSearch == null ? "" : " and upper(s.scanned_item_no) like :search");
 
         MapSqlParameterSource params = new MapSqlParameterSource("taskId", taskId)
@@ -478,7 +514,8 @@ public class SparePartTrackingProvider implements InventoryTrackingProvider {
                        (img.id is not null) as has_image, s.notes,
                        concat_ws(' | ', s.location_status, s.quantity_status, s.message) as details
                 """ + from + where
-                + " order by s.scanned_at desc, s.id desc limit :limit offset :offset";
+                + orderBy(pageable, EVENT_SORT_COLUMNS, "s.scanned_at desc, s.id desc")
+                + " limit :limit offset :offset";
 
         params.addValue("limit", pageable.getPageSize());
         params.addValue("offset", pageable.getOffset());
@@ -515,6 +552,14 @@ public class SparePartTrackingProvider implements InventoryTrackingProvider {
             );
         });
         return new PageImpl<>(content, pageable, total);
+    }
+
+    private void requireAttentionEventType(InventoryScanEventType eventType) {
+        if (eventType != InventoryScanEventType.EXTRA
+                && eventType != InventoryScanEventType.AMBIGUOUS
+                && eventType != InventoryScanEventType.CONFLICT) {
+            throw new IllegalArgumentException("Unsupported attention event type: " + eventType);
+        }
     }
 
     @Override

@@ -3,6 +3,7 @@ package com.pinetechs.orvix.ims.inventory.tracking.enums;
 public enum TrackingAttentionType {
     MISMATCH,
     EXTRA,
+    AMBIGUOUS,
     CONFLICT,
     MISSING_IMAGE,
     STAFF_NOTE,
