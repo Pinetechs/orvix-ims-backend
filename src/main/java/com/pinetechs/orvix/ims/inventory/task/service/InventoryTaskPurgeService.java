@@ -4,6 +4,8 @@ import com.pinetechs.orvix.ims.common.exception.BusinessException;
 import com.pinetechs.orvix.ims.file.service.UploadedFileService;
 import com.pinetechs.orvix.ims.inventory.asset.repository.*;
 import com.pinetechs.orvix.ims.inventory.common.enums.InventoryDomain;
+import com.pinetechs.orvix.ims.inventory.review.repository.InventoryRecheckItemRepository;
+import com.pinetechs.orvix.ims.inventory.review.repository.InventoryReviewPurgeRepository;
 import com.pinetechs.orvix.ims.inventory.sparepart.repository.*;
 import com.pinetechs.orvix.ims.inventory.task.entity.InventoryTask;
 import com.pinetechs.orvix.ims.inventory.task.repository.InventoryTaskAssignmentRepository;
@@ -48,6 +50,8 @@ public class InventoryTaskPurgeService {
     private final SparePartInventoryBrandRepository spareBrandRepository;
     private final BackgroundJobRepository backgroundJobRepository;
     private final UploadedFileService uploadedFileService;
+    private final InventoryRecheckItemRepository recheckItemRepository;
+    private final InventoryReviewPurgeRepository reviewPurgeRepository;
 
     public InventoryTaskPurgeService(
             InventoryTaskRepository taskRepository,
@@ -71,7 +75,9 @@ public class InventoryTaskPurgeService {
             SparePartInventoryBranchRepository spareBranchRepository,
             SparePartInventoryBrandRepository spareBrandRepository,
             BackgroundJobRepository backgroundJobRepository,
-            UploadedFileService uploadedFileService
+            UploadedFileService uploadedFileService,
+            InventoryRecheckItemRepository recheckItemRepository,
+            InventoryReviewPurgeRepository reviewPurgeRepository
     ) {
         this.taskRepository = taskRepository;
         this.taskAssignmentRepository = taskAssignmentRepository;
@@ -95,6 +101,8 @@ public class InventoryTaskPurgeService {
         this.spareBrandRepository = spareBrandRepository;
         this.backgroundJobRepository = backgroundJobRepository;
         this.uploadedFileService = uploadedFileService;
+        this.recheckItemRepository = recheckItemRepository;
+        this.reviewPurgeRepository = reviewPurgeRepository;
     }
 
     @Transactional(readOnly = true)
@@ -111,7 +119,8 @@ public class InventoryTaskPurgeService {
 
     /** Must be called after locking and re-validating the task in the caller transaction. */
     @Transactional
-    public void purge(InventoryTask task) {Long taskId = task.getId();
+    public void purge(InventoryTask task) {
+        Long taskId = task.getId();
         List<BackgroundJob> jobs = backgroundJobRepository.findByRelatedIdForUpdate(taskId);
         if (jobs.stream().anyMatch(job -> job.getStatus() == JobStatus.RUNNING)) {
             throw new BusinessException(HttpStatus.CONFLICT,
@@ -119,6 +128,9 @@ public class InventoryTaskPurgeService {
         }
 
         Set<Long> scanImageIds = new LinkedHashSet<>();
+        scanImageIds.addAll(recheckItemRepository.findEvidenceFileIdsByTaskId(taskId));
+        reviewPurgeRepository.deleteByTaskId(taskId);
+
         if (task.getInventoryDomain() == InventoryDomain.VEHICLE) {
             scanImageIds.addAll(vehicleScanRepository.findScanImageIdsByTaskId(taskId));
             vehicleItemRepository.removeScanItemByTaskId(taskId);

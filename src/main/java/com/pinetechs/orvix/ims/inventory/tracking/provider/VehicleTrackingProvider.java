@@ -480,10 +480,21 @@ public class VehicleTrackingProvider implements InventoryTrackingProvider {
     }
 
     private String unresolvedEventCondition(InventoryScanEventType eventType, boolean unresolvedOnly) {
-        if (!unresolvedOnly || eventType != InventoryScanEventType.CONFLICT) {
+        if (!unresolvedOnly) {
             return "";
         }
-        return """
+        String resolvedByReviewCenter = """
+                 and not exists (
+                       select 1 from inventory_review_issues ri
+                        where ri.task_id = s.task_id
+                          and ri.source_scan_id = s.id
+                          and ri.status in ('RESOLVED', 'SUPERSEDED')
+                 )
+                """;
+        if (eventType != InventoryScanEventType.CONFLICT) {
+            return resolvedByReviewCenter;
+        }
+        return resolvedByReviewCenter + """
                  and not exists (
                        select 1 from vehicle_inventory_scans correction
                         where correction.task_id = s.task_id

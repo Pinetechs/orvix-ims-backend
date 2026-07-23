@@ -11,5 +11,6 @@ public enum InventoryScanEventType {
     CONFLICT,
     EXTRA,
     AMBIGUOUS,
-    CORRECTION
+    CORRECTION,
+    RECHECK
 }

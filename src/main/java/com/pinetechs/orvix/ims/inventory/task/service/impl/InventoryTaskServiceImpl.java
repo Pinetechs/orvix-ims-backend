@@ -22,6 +22,7 @@ import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskService;
 import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskActivityService;
 import com.pinetechs.orvix.ims.inventory.task.service.InventoryTaskPurgeService;
 import com.pinetechs.orvix.ims.inventory.tracking.provider.InventoryTrackingProviderRegistry;
+import com.pinetechs.orvix.ims.inventory.review.service.ReviewCenterService;
 import com.pinetechs.orvix.ims.security.AccessPolicyService;
 import com.pinetechs.orvix.ims.user.entity.User;
 import com.pinetechs.orvix.ims.user.enums.PermissionCode;
@@ -60,6 +61,7 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
     private final SparePartInventoryBranchAssignmentRepository spareBranchAssignmentRepository;
     private final InventoryTaskActivityService taskActivityService;
     private final InventoryTrackingProviderRegistry trackingProviderRegistry;
+    private final ReviewCenterService reviewCenterService;
 
 
     public InventoryTaskServiceImpl(
@@ -76,6 +78,7 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
             SparePartInventoryBranchAssignmentRepository spareBranchAssignmentRepository,
             InventoryTaskActivityService taskActivityService,
             InventoryTrackingProviderRegistry trackingProviderRegistry,
+            ReviewCenterService reviewCenterService,
             InventoryTaskPurgeService purgeService) {
         this.inventoryTaskRepository = inventoryTaskRepository;
         this.companyRepository = companyRepository;
@@ -90,6 +93,7 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
         this.spareBranchAssignmentRepository = spareBranchAssignmentRepository;
         this.taskActivityService = taskActivityService;
         this.trackingProviderRegistry = trackingProviderRegistry;
+        this.reviewCenterService = reviewCenterService;
         this.purgeService = purgeService;
     }
 
@@ -281,6 +285,7 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
         task.setReviewStartedAt(LocalDateTime.now());
 
         InventoryTask savedTask = inventoryTaskRepository.save(task);
+        reviewCenterService.synchronize(savedTask.getId(), currentUser);
         taskActivityService.record(
                 savedTask,
                 InventoryTaskActivityType.SUBMITTED_FOR_REVIEW,
@@ -301,6 +306,10 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
         if (task.getStatus() != InventoryTaskStatus.UNDER_REVIEW) {
             throw new BusinessException(HttpStatus.CONFLICT,
                     "Only an UNDER_REVIEW task can be returned to progress");
+        }
+        if (reviewCenterService.countActiveRechecks(taskId) > 0) {
+            throw new BusinessException(HttpStatus.CONFLICT,
+                    "Cancel or finish active recheck requests before returning the task to progress");
         }
 
         String normalizedReason = requireReason(reason, "Return reason is required");
@@ -329,6 +338,16 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
 
         if (task.getStatus() != InventoryTaskStatus.UNDER_REVIEW) {
             throw new BusinessException(HttpStatus.CONFLICT, "Only an UNDER_REVIEW task can be completed");
+        }
+        reviewCenterService.synchronize(taskId, currentUser);
+        long blockingIssues = reviewCenterService.countBlockingOpenIssues(taskId);
+        if (blockingIssues > 0) {
+            throw new BusinessException(HttpStatus.CONFLICT,
+                    "Task has " + blockingIssues + " unresolved blocking review issue(s)");
+        }
+        if (reviewCenterService.countActiveRechecks(taskId) > 0) {
+            throw new BusinessException(HttpStatus.CONFLICT,
+                    "Task has active recheck requests");
         }
 
         InventoryTaskStatus fromStatus = task.getStatus();
@@ -362,6 +381,10 @@ public class InventoryTaskServiceImpl implements InventoryTaskService {
                 || task.getStatus() == InventoryTaskStatus.IMPORT_IN_PROGRESS) {
             throw new BusinessException(HttpStatus.CONFLICT,
                     "Task cannot be cancelled while its import job is pending or running");
+        }
+        if (reviewCenterService.countActiveRechecks(taskId) > 0) {
+            throw new BusinessException(HttpStatus.CONFLICT,
+                    "Cancel active recheck requests before cancelling the task");
         }
 
         String normalizedReason = requireReason(cancelReason, "Cancellation reason is required");

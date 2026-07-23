@@ -481,7 +481,16 @@ public class SparePartTrackingProvider implements InventoryTrackingProvider {
         String where = " where s.task_id = :taskId "
                 + (eventType == null ? "" : " and s.event_type = :eventType ")
                 + (unresolvedOnly
-                    ? " and s.review_required = true and s.review_resolved_at is null "
+                    ? """
+                       and s.review_required = true
+                       and s.review_resolved_at is null
+                       and not exists (
+                             select 1 from inventory_review_issues ri
+                              where ri.task_id = s.task_id
+                                and ri.source_scan_id = s.id
+                                and ri.status in ('RESOLVED', 'SUPERSEDED')
+                       )
+                      """
                     : "")
                 + (normalizedSearch == null ? "" : " and upper(s.scanned_item_no) like :search");
 

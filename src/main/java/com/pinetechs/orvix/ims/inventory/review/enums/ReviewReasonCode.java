@@ -1,0 +1,16 @@
+package com.pinetechs.orvix.ims.inventory.review.enums;
+
+public enum ReviewReasonCode {
+    RECHECK_CONFIRMED,
+    COUNTING_ERROR,
+    WRONG_LOCATION_SELECTED,
+    ITEM_MOVED,
+    ITEM_MISSING,
+    ITEM_DESTROYED,
+    ITEM_NOT_IN_SOURCE_DATA,
+    DUPLICATE_SOURCE_RECORD,
+    BARCODE_DAMAGED,
+    SOURCE_DATA_ERROR,
+    ACCESS_RESTRICTED,
+    OTHER
+}

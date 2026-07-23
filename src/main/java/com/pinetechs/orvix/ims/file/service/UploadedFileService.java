@@ -171,10 +171,16 @@ public class UploadedFileService {
     }
 
     public UploadedFile markAsAttached(Long uploadedFileId) {
-        UploadedFile file = uploadedFileRepository.findByIdAndDeletedFalse(uploadedFileId)
-                .orElseThrow(() -> new IllegalArgumentException("Uploaded file not found"));
-        file.setTemp(false);
-        return uploadedFileRepository.save(file);
+        if (uploadedFileId == null) {
+            throw new IllegalArgumentException("Uploaded file id is required");
+        }
+
+        int updatedRows = uploadedFileRepository.markAsAttached(uploadedFileId);
+        if (updatedRows == 0) {
+            throw new IllegalArgumentException("Uploaded file not found");
+        }
+
+        return uploadedFileRepository.getReferenceById(uploadedFileId);
     }
 
     /**
